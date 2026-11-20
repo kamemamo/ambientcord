@@ -254,7 +254,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
       <li>右に言葉を足すと値が変わります。<code>反転</code>・<code>× 0.5</code>・<code>+ 0.2</code>・<code>段階 4</code>・<code>ゆっくり</code>、線の色には <code>青 … 橙</code> のような色のつながり、渦には <code>近く 30</code>。</li>
     </ol>
     <p>すべての値は 0 から 1 の間に揃えてから表現に渡します。<code>#</code> から後ろはメモとして読み飛ばします。</p>
-    <p>何も書かなければ、何も描かれません。<code>空</code> を書くと空の色が、<code>光</code> を書くと太陽・月が、<code>粒</code> を書くと流れに漂う粒が、線の言葉（線の色・速さ・軌跡・向き・方角・渦・太さ・数・乱れ）を一つでも書くと流れが現れます。書かなかった言葉は既定の値で動きます。行を消すと、その部分はゆっくり消えていきます。</p>
+    <p>何も書かなければ、何も描かれません。<code>空</code> を書くと空の色が、<code>光</code> を書くと太陽・月が、粒の言葉（粒・粒の色・粒の大きさ・粒の速さ）を一つでも書くと流れに漂う粒が、線の言葉（線の色・速さ・軌跡・向き・方角・渦・太さ・数・乱れ）を一つでも書くと流れが現れます。書かなかった言葉は既定の値で動きます。行を消すと、その部分はゆっくり消えていきます。</p>
     <h2>早見表：数値と見え方</h2>
     <p>表現は 0〜1 の値で見え方が決まります。環境は実際の値を 0〜1 に換算して渡します。数値を直接書くときの目安にしてください（例：<code>空 ← 0.75</code> は夕方6時の空）。</p>
     <div class="tbl-wrap"><table class="tbl" id="tbl-out"></table></div>
@@ -283,11 +283,14 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
   const view = { show: false, cap: false, lite: false, fs: false };   // 展示モードの状態
 
   /* ================= Language: vocabulary ================= */
-  const OUT = { "空の色": "sky", "空": "sky", "光": "orb", "粒": "grain", "にじみ": "bleed", "線の色": "color", "色": "color", "速さ": "speed", "軌跡": "trail", "向き": "drift", "方角": "heading", "渦": "swirl", "太さ": "width", "数": "count", "乱れ": "turb" };
+  const OUT = { "空の色": "sky", "空": "sky", "光": "orb", "粒": "grain", "粒の色": "gcolor", "粒の大きさ": "gsize", "粒の速さ": "gspeed", "にじみ": "bleed", "線の色": "color", "色": "color", "速さ": "speed", "軌跡": "trail", "向き": "drift", "方角": "heading", "渦": "swirl", "太さ": "width", "数": "count", "乱れ": "turb" };
   const OUT_INFO = {
     sky:   { name: "空",     def: 0.5,  tip: "空の色（0 深夜 / 0.5 正午）" },
     orb:   { name: "光",     def: 0.5,  tip: "太陽・月の位置（0 深夜 / 0.5 正午）" },
     grain: { name: "粒",     def: 0.5,  tip: "流れに漂う粒の多さ" },
+    gcolor: { name: "粒の色", def: 0.5, tip: "粒の色。色のつながりの中の位置" },
+    gsize: { name: "粒の大きさ", def: 0.35, tip: "粒の大きさ" },
+    gspeed: { name: "粒の速さ", def: 0.15, tip: "粒の漂う速さ" },
     bleed: { name: "にじみ", def: 0.5,  tip: "線や粒のまわりのにじみ" },
     color: { name: "線の色", def: 0.5,  tip: "色のつながりの中の位置" },
     speed: { name: "速さ",   def: 0.25, tip: "流れの速さ" },
@@ -306,6 +309,9 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     sky:   ["深夜", "正午", "深夜（0 と同じ）", "0.25 朝6時、0.75 夕方6時"],
     orb:   ["月が一番高い", "太陽が一番高い", "月が一番高い（0 と同じ）", "0.25〜0.75 は太陽、ほかは月。0.25 と 0.75 で地平線の近く"],
     grain: ["粒なし", "ほどほど", "最も多い", "数は画面の広さで変わる"],
+    gcolor: ["つながりの最初の色", "つながりの真ん中", "つながりの最後の色", "書かないときは 線の色 に合わせるか、背景に合わせた白・墨色。つながりを書かないときは 青 … 橙"],
+    gsize: ["とても小さい（0.3 倍）", "やや大きい（1.3 倍）", "大きい（2.3 倍）", "既定 0.35 で 1 倍。一粒ずつの大きさの違いは残る"],
+    gspeed: ["ほぼ止まる", "線のふつうの速さくらい", "速い", "既定 0.15。線の 速さ とは別"],
     bleed: ["くっきり", "ふんわり", "大きくにじむ", "線や粒がないと見えない"],
     color: ["つながりの最初の色", "つながりの真ん中", "つながりの最後の色", "書かないときのつながりは 青 … 橙"],
     speed: ["ゆっくり", "ふつう", "速い", ""],
@@ -345,7 +351,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
   MODS.forEach((w) => WORD_CAT[w] = "mod");
   Object.keys(COLORS).forEach((w) => WORD_CAT[w] = "col");
   const hsl = (c) => `hsl(${c[0]},${c[1]}%,${c[2]}%)`;
-  const OUT_NAMES = "空・光・粒・にじみ・線の色・速さ・軌跡・向き・方角・渦・太さ・数・乱れ";
+  const OUT_NAMES = "空・光・粒・粒の色・粒の大きさ・粒の速さ・にじみ・線の色・速さ・軌跡・向き・方角・渦・太さ・数・乱れ";
   const IN_NAMES = IN_LIST.join("・");
 
   /* ================= Language: tokenizer & parser ================= */
@@ -443,7 +449,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
             ramp.push(c.w); i++;
           }
           if (ramp.length < 2) throw new Error(`色は ${tk.w} … 橙 のように二つ以上つなげます`);
-          if (out !== "color") b.warns.push("色のつながりは 線の色 のときだけ効きます");
+          if (out !== "color" && out !== "gcolor") b.warns.push("色のつながりは 線の色 と 粒の色 のときだけ効きます");
           b.ramp = ramp.map((w) => COLORS[w]);
         } else if (tk.k === "num") {
           throw new Error(`数値 ${tk.v} の前に × か + を置いてください`);
@@ -629,7 +635,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
       v.src.textContent = b ? "← " + b.text
         : k === "sky" ? "書かれていないので、空はありません"
         : k === "orb" ? "書かれていないので、太陽・月はありません"
-        : k === "grain" ? "書かれていないので、粒はありません"
+        : GRAIN_KEYS.includes(k) ? (GRAIN_KEYS.some((x) => program[x]) ? "書かれていないので既定の値" : "粒の言葉が書かれていないので、粒はありません")
         : k === "bleed" ? "書かれていないので、にじみはありません"
         : !flowOn ? "線の言葉が書かれていないので、流れはありません"
         : "書かれていないので既定の値";
@@ -775,8 +781,9 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
   }
   const DEFAULT_RAMP = [COLORS["青"], COLORS["橙"]];
   const VOID = [9, 11, 10];   // 何も書かれていないときの色
-  const FLOW_KEYS = OUT_ORDER.filter((k) => k !== "sky" && k !== "orb" && k !== "grain" && k !== "bleed");
-  const layerTarget = () => ({ sky: program.sky ? 1 : 0, orb: program.orb ? 1 : 0, grain: program.grain ? 1 : 0, bleed: program.bleed ? 1 : 0, flow: FLOW_KEYS.some((k) => program[k]) ? 1 : 0 });
+  const GRAIN_KEYS = ["grain", "gcolor", "gsize", "gspeed"];   // どれか一つでも書くと粒が現れる
+  const FLOW_KEYS = OUT_ORDER.filter((k) => k !== "sky" && k !== "orb" && k !== "bleed" && !GRAIN_KEYS.includes(k));
+  const layerTarget = () => ({ sky: program.sky ? 1 : 0, orb: program.orb ? 1 : 0, grain: GRAIN_KEYS.some((k) => program[k]) ? 1 : 0, bleed: program.bleed ? 1 : 0, flow: FLOW_KEYS.some((k) => program[k]) ? 1 : 0 });
   const layer = { sky: 0, orb: 0, grain: 0, bleed: 0, flow: 0 };
 
   const stage = $("stage"), cv = $("cv"), ctx = cv.getContext("2d");
@@ -939,13 +946,15 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
 
     /* ---- 粒：線より遅く漂い、ひとつずつ明滅する ---- */
     if (layer.grain >= 0.005) {
-      const shown = Math.round(G * P.grain);
+      const shown = Math.round(G * (program.grain ? P.grain : OUT_INFO.grain.def));
+      const gspeed = (0.1 + 1.8 * P.gspeed) * slow * dtf * scale;   // 線の 速さ とは別
+      const gscale = 0.3 + 2 * P.gsize;
       const paths = [new Path2D(), new Path2D(), new Path2D()];   // 明るさ 3 段
       const halo = bl > 0.01 ? new Path2D() : null, hk = 1.8 + 2.6 * bl;
       for (let i = 0; i < shown; i++) {
         const x = gx[i], y = gy[i];
         field(x, y);
-        const sp = speed * 0.32 * gsp[i] * fs;
+        const sp = gspeed * gsp[i] * fs;
         const nx = x + fx * sp, ny = y + fy * sp;
         glife[i] -= dtf;
         if (glife[i] <= 0 || nx < -4 || ny < -4 || nx > W + 4 || ny > H + 4) { seedGrain(i); continue; }
@@ -953,14 +962,18 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
         // 生まれてすぐと消える前は小さく、ときどき瞬く
         const lifeF = Math.min(1, glife[i] / 40, (gmax[i] - glife[i]) / 40);
         const tw = 0.55 + 0.45 * Math.sin(tSec * gtw[i] + gph[i]);
-        const r = gsz[i] * lifeF * (0.7 + 0.3 * tw);
+        const r = gsz[i] * gscale * lifeF * (0.7 + 0.3 * tw);
         if (r < 0.15) continue;
         const p = paths[tw > 0.8 ? 2 : tw > 0.45 ? 1 : 0];
         p.moveTo(nx + r, ny); p.arc(nx, ny, r, 0, Math.PI * 2);
         if (halo) { halo.moveTo(nx + r * hk, ny); halo.arc(nx, ny, r * hk, 0, Math.PI * 2); }
       }
       // 色：線の色が書かれていればその色を明るく、なければ背景に合わせた白か墨色
-      const base = cb ? [c[0], c[1], clamp(c[2] + (dk > 0.5 ? 22 : -10), 8, 96)] : [0, 0, dk > 0.5 ? 94 : 18];
+      // 色：粒の色 があればそれ、なければ 線の色 を明るめに、どちらもなければ背景に合わせた白か墨色
+      const gb = program.gcolor;
+      const gc = gb ? rampColor(gb.ramp || DEFAULT_RAMP, P.gcolor) : null;
+      const base = gc ? [gc[0], gc[1], clamp(gc[2] + (dk > 0.5 ? 12 : -6), 8, 96)]
+        : cb ? [c[0], c[1], clamp(c[2] + (dk > 0.5 ? 22 : -10), 8, 96)] : [0, 0, dk > 0.5 ? 94 : 18];
       if (halo) {
         ctx.fillStyle = `hsla(${base[0].toFixed(1)},${base[1].toFixed(0)}%,${base[2].toFixed(0)}%,${((0.006 + 0.016 * bl) * layer.grain).toFixed(4)})`;
         ctx.fill(halo);
