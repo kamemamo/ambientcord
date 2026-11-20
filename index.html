@@ -245,6 +245,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
       <li>右に言葉を足すと値が変わります。<code>反転</code>・<code>× 0.5</code>・<code>+ 0.2</code>・<code>段階 4</code>・<code>ゆっくり</code>、線の色には <code>青 … 橙</code> のような色のつながり、渦には <code>近く 30</code>。</li>
     </ol>
     <p>すべての値は 0 から 1 の間に揃えてから表現に渡します。<code>#</code> から後ろはメモとして読み飛ばします。</p>
+    <p>何も書かなければ、何も描かれません。<code>空</code> を書くと空と太陽・月が、線の言葉（線の色・速さ・軌跡・向き・方角・渦・太さ・数・乱れ）を一つでも書くと流れが現れます。書かなかった言葉は既定の値で動きます。行を消すと、その部分はゆっくり消えていきます。</p>
     <h2>実際の天気について</h2>
     <p>気温・風・風向・雨・雲・湿度は、Open-Meteo の気象データにつなぐと実際の値になります（10分ごとに更新）。claude.ai の中で開いているときは外への通信が止められているので、シミュレーションの値で動きます。このHTMLファイルを自分のブラウザや Raspberry Pi の画面で開くと、そのまま実際の天気に反応します。音量はマイク、照度は照度センサーかカメラにつなげます。</p>
     <h2>マイクについて</h2>
@@ -561,7 +562,11 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     OUT_ORDER.forEach((k) => {
       const b = program[k], v = vrows[k];
       v.el.classList.toggle("off", !b);
-      v.src.textContent = b ? "← " + b.text : "書かれていないので既定の値";
+      const flowOn = FLOW_KEYS.some((x) => program[x]);
+      v.src.textContent = b ? "← " + b.text
+        : k === "sky" ? "書かれていないので、空はありません"
+        : !flowOn ? "線の言葉が書かれていないので、流れはありません"
+        : "書かれていないので既定の値";
     });
   }
 
@@ -703,6 +708,10 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     return [lerp(ha, hb, f), lerp(a[1], b[1], f), lerp(a[2], b[2], f)];
   }
   const DEFAULT_RAMP = [COLORS["青"], COLORS["橙"]];
+  const VOID = [9, 11, 10];   // 何も書かれていないときの色
+  const FLOW_KEYS = OUT_ORDER.filter((k) => k !== "sky");
+  const layerTarget = () => ({ sky: program.sky ? 1 : 0, flow: FLOW_KEYS.some((k) => program[k]) ? 1 : 0 });
+  const layer = { sky: 0, flow: 0 };
 
   const stage = $("stage"), cv = $("cv"), ctx = cv.getContext("2d");
   let W = 1, H = 1, N = 0, px, py, life, tz = Math.random() * 100, windOff = 0, tSec = 0;
@@ -724,12 +733,20 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     ctx.fillRect(x - r * 2.6, y - r * 2.6, r * 5.2, r * 5.2); ctx.globalAlpha = 1;
   }
 
+  // 書かれたものだけが現れる：空 を書けば空と太陽・月が、線の言葉を書けば流れが現れる。
+  // 何も書かれていなければ「無」の色だけになる。消したものはゆっくり無に溶ける。
+  function bgNow() {
+    const h = P.sky * 24, s0 = sky(h);
+    return { h, top: mixc(VOID, s0.top, layer.sky), bot: mixc(VOID, s0.bot, layer.sky) };
+  }
   function step(dtf) {
-    const h = P.sky * 24, sk = sky(h);
+    const sk = bgNow(), h = sk.h;
     const lum = (lumOf(sk.top) + lumOf(sk.bot)) / 2;
-    const fadeA = clamp((0.012 + 0.07 * (1 - P.trail)) * dtf, 0, 0.3);
+    // 流れが消えていくときは塗り重ねを強めて、線の跡が薄く残り続けないようにする
+    const fadeA = clamp((0.012 + 0.07 * (1 - P.trail) + 0.2 * (1 - layer.flow)) * dtf, 0, 0.3);
     paintSky(sk, fadeA);
-    drawOrb(h, fadeA);
+    if (layer.sky > 0.01) drawOrb(h, fadeA * layer.sky);
+    if (layer.flow < 0.005) return;
 
     const slow = reduce ? 0.3 : 1, md = Math.min(W, H), scale = clamp(md / 600, 0.7, 1.6);
     const speed = (0.45 + P.speed * 2.8) * slow * dtf * scale;
@@ -777,7 +794,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     ctx.lineWidth = 0.5 + P.width * 4;
     ctx.lineCap = "round";
     for (let g = 0; g < 3; g++) {
-      ctx.strokeStyle = `hsla(${(c[0] + (g - 1) * 12).toFixed(1)},${c[1].toFixed(0)}%,${clamp(L + (g - 1) * 6, 5, 96).toFixed(0)}%,0.52)`;
+      ctx.strokeStyle = `hsla(${(c[0] + (g - 1) * 12).toFixed(1)},${c[1].toFixed(0)}%,${clamp(L + (g - 1) * 6, 5, 96).toFixed(0)}%,${(0.52 * layer.flow).toFixed(3)})`;
       ctx.stroke(paths[g]);
     }
   }
@@ -793,7 +810,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     N = Math.round(clamp((W * H) / 520, 400, 1900) * (reduce ? 0.6 : 1) * (view.lite ? 0.7 : 1));
     px = new Float32Array(N); py = new Float32Array(N); life = new Float32Array(N);
     for (let i = 0; i < N; i++) seed(i);
-    paintSky(sky(P.sky * 24), 1);
+    paintSky(bgNow(), 1);
     for (let i = 0; i < 90; i++) step(1);
   }
   let rz = 0;
@@ -825,6 +842,9 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
       const target = b ? evalBinding(b, ENV, dtSec) : OUT_INFO[k].def;
       P[k] += (target - P[k]) * (1 - Math.pow(0.85, dtf));   // 書き換えた瞬間も絵がなめらかにつながるように
     });
+    const lt = layerTarget(), le = 1 - Math.pow(0.97, dtf);   // 現れる・消えるは1秒ほどかけて
+    layer.sky += (lt.sky - layer.sky) * le;
+    layer.flow += (lt.flow - layer.flow) * le;
     if (N > 0) step(dtf);
     requestAnimationFrame(frame);
   }
@@ -1208,11 +1228,12 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
 
   /* ================= Start ================= */
   let initial = PRESETS.window;
-  try { const d = localStorage.getItem("soyogi-draft"); if (d && d.trim()) initial = d; } catch (e) {}
+  try { const d = localStorage.getItem("soyogi-draft"); if (d !== null) initial = d; } catch (e) {}   // 空にしたなら、空のまま開く
   if (linkCode && linkCode.trim()) initial = linkCode;
   src.value = initial;
   compile(initial);
   paint();
+  Object.assign(layer, layerTarget());   // 開いたときは、書かれているものがすでにある状態から
   resize();
   uiTick();
   setInterval(uiTick, 250);
