@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>そよぎ — 環境と絵の関係を書く言語</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Zen+Old+Mincho:wght@500;600&display=swap">
+<style>
+:root {
+  --bg: #E8ECE9; --surface: #F3F5F3; --fg: #17201C; --muted: #5A6762; --line: #CBD3CE;
+  --accent: #2D6A6C; --manual: #8C5A24; --err: #B4412F; --errbg: rgba(180,65,47,.10);
+  --c-out: #2D6A6C; --c-in: #3F5FA8; --c-mod: #8C5A24; --c-num: #6B4FA0; --c-com: #8A958F;
+  --f-display: "Zen Old Mincho", "Hiragino Mincho ProN", "Yu Mincho", serif;
+  --f-body: "Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif;
+  --f-mono: "IBM Plex Mono", "Zen Kaku Gothic New", "Hiragino Sans", ui-monospace, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0E1311; --surface: #151B18; --fg: #E1E7E3; --muted: #92A09A; --line: #28322E;
+    --accent: #86B9B5; --manual: #D8A766; --err: #E58A78; --errbg: rgba(229,138,120,.12);
+    --c-out: #86B9B5; --c-in: #93AEE8; --c-mod: #D8A766; --c-num: #C1A7EC; --c-com: #66736D;
+    color-scheme: dark;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--f-body); font-size: 15px; line-height: 1.75; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 28px max(16px, env(safe-area-inset-left, 0px)) 64px; display: grid; gap: 24px; }
+.head { display: grid; gap: 6px; max-width: 68ch; }
+.eyebrow { margin: 0; font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; color: var(--muted); }
+h1 { margin: 0; font-family: var(--f-display); font-weight: 600; font-size: clamp(28px, 4vw, 42px); line-height: 1.3; letter-spacing: .06em; }
+h1 small { display: block; font-size: .42em; letter-spacing: .1em; color: var(--muted); font-weight: 500; margin-top: 4px; }
+.lede { margin: 0; color: var(--muted); }
+
+.main { display: grid; gap: 28px; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  grid-template-areas: "stage code" "values code" "env code"; align-items: start; }
+@media (max-width: 900px) { .main { grid-template-columns: minmax(0, 1fr); grid-template-areas: "stage" "code" "values" "env"; } }
+.a-stage { grid-area: stage; display: grid; gap: 10px; min-width: 0; }
+.a-code { grid-area: code; display: grid; gap: 14px; min-width: 0; }
+.a-values { grid-area: values; min-width: 0; }
+.a-env { grid-area: env; min-width: 0; }
+
+.stage { position: relative; width: 100%; aspect-ratio: 4 / 3; border-radius: 3px; overflow: hidden; background: var(--surface); }
+#cv { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor: crosshair; }
+.cap-label, .label { font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; color: var(--muted); margin: 0; }
+.cap-text { margin: 0; font-family: var(--f-display); font-size: 17px; font-weight: 500; letter-spacing: .08em; }
+
+/* editor */
+.ed { position: relative; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); }
+.ed:focus-within { border-color: var(--accent); }
+.ed pre, .ed textarea {
+  margin: 0; padding: 14px 14px 14px 3em; font-family: var(--f-mono); font-size: 15px; line-height: 1.9;
+  white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; tab-size: 4; letter-spacing: 0; border: 0;
+}
+.ed pre { pointer-events: none; min-height: 12em; color: var(--fg); counter-reset: ln; }
+.ed textarea { position: absolute; inset: 0; width: 100%; height: 100%; resize: none; overflow: hidden;
+  background: transparent; color: transparent; caret-color: var(--fg); outline: none; -webkit-text-fill-color: transparent; }
+.ed textarea::selection { background: rgba(45,106,108,.25); -webkit-text-fill-color: transparent; }
+.ln { display: block; position: relative; counter-increment: ln; border-radius: 2px; }
+.ln::before { content: counter(ln); position: absolute; left: -2.6em; width: 2em; text-align: right; color: var(--c-com); font-size: 12px; }
+.ln.bad { background: var(--errbg); }
+.ln.bad::before { color: var(--err); font-weight: 500; }
+.t-out { color: var(--c-out); font-weight: 500; }
+.t-in { color: var(--c-in); font-weight: 500; }
+.t-mod { color: var(--c-mod); }
+.t-num { color: var(--c-num); }
+.t-arrow { color: var(--muted); }
+.t-com { color: var(--c-com); }
+.t-col { box-shadow: inset 0 -4px 0 var(--sw); }
+
+.status { margin: 0; font-size: 13px; color: var(--muted); }
+.status.ok::before { content: "● "; color: var(--accent); }
+.errs { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.errs li { font-size: 13px; line-height: 1.6; color: var(--err); }
+.errs li.warn { color: var(--manual); }
+.errs b { font-family: var(--f-mono); font-weight: 500; margin-right: 6px; }
+
+.btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.btn { font: inherit; font-size: 13px; line-height: 1.4; color: var(--fg); background: transparent; border: 1px solid var(--line); border-radius: 4px; padding: 7px 12px; cursor: pointer; }
+.btn:hover:not(:disabled) { background: var(--surface); border-color: var(--muted); }
+.btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn:focus-visible, input:focus-visible, .w:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* vocabulary */
+.vocab { display: grid; gap: 10px; border-top: 1px solid var(--line); padding-top: 14px; }
+.vg { display: grid; gap: 4px; }
+.vg .words { display: flex; flex-wrap: wrap; gap: 6px; }
+.w { font-family: var(--f-mono); font-size: 14px; line-height: 1.3; padding: 6px 10px; min-height: 34px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.w.out { color: var(--c-out); } .w.in { color: var(--c-in); } .w.mod { color: var(--c-mod); }
+.w.col { box-shadow: inset 0 -4px 0 var(--sw); }
+.vhint { margin: 0; font-size: 12px; color: var(--muted); }
+
+/* live values */
+.vals { border-bottom: 1px solid var(--line); }
+.vrow { display: grid; grid-template-columns: 4.6em minmax(0, 1fr) 3em; gap: 4px 12px; align-items: center; padding-block: 8px; border-top: 1px solid var(--line); }
+.vrow .nm { font-weight: 500; }
+.vrow .src { grid-column: 2 / 4; font-family: var(--f-mono); font-size: 12px; color: var(--muted); overflow-wrap: anywhere; line-height: 1.5; }
+.vrow.off .nm, .vrow.off .num { color: var(--muted); font-weight: 400; }
+.bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.bar span { display: block; height: 100%; width: 0; background: var(--accent); }
+.vrow.off .bar span { background: var(--muted); opacity: .5; }
+.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-size: 13px; text-align: right; }
+
+/* environment */
+details.env { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
+.erow { display: grid; grid-template-columns: 4.6em auto minmax(0,1fr) 4.4em; gap: 4px 10px; align-items: center; padding-block: 6px; }
+.erow .nm { font-weight: 500; }
+.chip { font-size: 11px; line-height: 1; padding: 4px 7px; border: 1px solid currentColor; border-radius: 999px; color: var(--muted); white-space: nowrap; }
+.chip[data-kind="real"] { color: var(--accent); }
+.chip[data-kind="manual"] { color: var(--manual); }
+.erow input[type=range] { width: 100%; margin: 0; accent-color: var(--accent); }
+.erow .num { font-size: 13px; }
+.meter { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.meter span { display: block; height: 100%; width: 0; background: var(--accent); }
+
+.wx { display: grid; gap: 8px; padding-bottom: 14px; }
+.wx-form { display: flex; gap: 8px; flex-wrap: wrap; margin: 0; }
+.wx-form input { flex: 1 1 12em; min-width: 0; font: inherit; font-size: 15px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--fg); }
+.wx-form input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.wx-status { margin: 0; font-size: 13px; line-height: 1.6; color: var(--muted); }
+.wx-status.ok { color: var(--accent); }
+.wx-status.err { color: var(--manual); }
+.note { max-width: 68ch; display: grid; gap: 8px; padding-top: 20px; border-top: 1px solid var(--line); }
+.note h2 { margin: 0; font-family: var(--f-display); font-weight: 600; font-size: 20px; letter-spacing: .06em; }
+.note p { margin: 0; }
+.note code { font-family: var(--f-mono); font-size: 14px; background: var(--surface); padding: 1px 5px; border-radius: 3px; }
+.note ol { margin: 0; padding-left: 1.4em; display: grid; gap: 4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="head">
+    <p class="eyebrow">アンビエント・コーディング ／ 試作 02</p>
+    <h1>そよぎ<small>環境と絵の関係を書く言語</small></h1>
+    <p class="lede">「何が何に従うか」を一行ずつ書くと、絵がその場で変わります。命令ではなく関係だけを書くので、書き終えたあとも環境が絵を動かし続けます。</p>
+  </header>
+
+  <div class="main">
+    <section class="a-stage" aria-label="作品">
+      <div class="stage" id="stage"><canvas id="cv" role="img" aria-label="そよぎで書いた関係に従って変化する流れの絵"></canvas></div>
+      <p class="cap-label">いまの環境</p>
+      <p class="cap-text" id="cap-text">読み込み中</p>
+    </section>
+
+    <section class="a-code" aria-label="コード">
+      <div class="ed">
+        <pre id="hl" aria-hidden="true"></pre>
+        <textarea id="src" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="そよぎのコード"></textarea>
+      </div>
+      <p class="status" id="status"></p>
+      <ul class="errs" id="errs"></ul>
+      <div class="btns">
+        <span class="label">見本</span>
+        <button class="btn" type="button" data-preset="window">環境の窓</button>
+        <button class="btn" type="button" data-preset="night">夜の呼吸</button>
+        <button class="btn" type="button" data-preset="noise">ざわめき</button>
+        <button class="btn" type="button" id="btn-copy">コピー</button>
+      </div>
+      <div class="vocab" id="vocab">
+        <p class="vhint">言葉をタップすると、カーソルの位置に入ります。</p>
+      </div>
+    </section>
+
+    <section class="a-values" aria-label="いまの値">
+      <p class="label" style="margin-bottom:6px">表現のいまの値</p>
+      <div class="vals" id="vals"></div>
+    </section>
+
+    <section class="a-env">
+      <div class="wx">
+        <p class="label">実際の天気につなぐ（Open-Meteo）</p>
+        <form class="wx-form" id="wx-form">
+          <input id="wx-city" type="text" placeholder="都市名（例：東京、札幌、京都）" aria-label="都市名" autocomplete="off">
+          <button class="btn" type="submit">つなぐ</button>
+          <button class="btn" type="button" id="wx-here">現在地</button>
+        </form>
+        <p class="wx-status" id="wx-status">いまはシミュレーションの天気で動いています。</p>
+      </div>
+      <details class="env" id="env">
+        <summary>環境を手で動かす</summary>
+        <div id="env-rows"></div>
+        <div class="btns" style="padding-bottom:12px">
+          <button class="btn" id="btn-now" type="button" disabled>今の時刻に戻す</button>
+          <button class="btn" id="btn-auto" type="button" disabled>センサーを自動に戻す</button>
+        </div>
+      </details>
+    </section>
+  </div>
+
+  <section class="note">
+    <h2>書き方</h2>
+    <ol>
+      <li>一行に一つ、<code>表現 ← 環境</code> と書きます。<code>&lt;-</code> や <code>は</code> でもかまいません。</li>
+      <li>環境どうしは <code>と</code> でつなぐと平均になります。数値（0〜1）もそのまま書けます。</li>
+      <li>右に言葉を足すと値が変わります。<code>反転</code>・<code>× 0.5</code>・<code>+ 0.2</code>・<code>段階 4</code>・<code>ゆっくり</code>、線の色には <code>青 … 橙</code> のような色のつながり、渦には <code>近く 30</code>。</li>
+    </ol>
+    <p>すべての値は 0 から 1 の間に揃えてから表現に渡します。<code>#</code> から後ろはメモとして読み飛ばします。</p>
+    <h2>実際の天気について</h2>
+    <p>気温・風・風向・雨・雲・湿度は、Open-Meteo の気象データにつなぐと実際の値になります（10分ごとに更新）。claude.ai の中で開いているときは外への通信が止められているので、シミュレーションの値で動きます。このHTMLファイルを自分のブラウザや Raspberry Pi の画面で開くと、そのまま実際の天気に反応します。音量と照度は、今後マイクやセンサーにつなぐ予定です。</p>
+    <p>風向は「風が吹いてくる方角」で、北が 0、東が 0.25、南が 0.5、西が 0.75 です。<code>方角 ← 風向</code> と書くと、線は風下へ流れます。</p>
+  </section>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+  const lerp = (a, b, t) => a + t * (b - a);
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const randn = () => { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+  const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  /* ================= Language: vocabulary ================= */
+  const OUT = { "空の色": "sky", "空": "sky", "線の色": "color", "色": "color", "速さ": "speed", "軌跡": "trail", "向き": "drift", "方角": "heading", "渦": "swirl", "太さ": "width", "数": "count", "乱れ": "turb" };
+  const OUT_INFO = {
+    sky:   { name: "空",     def: 0.5,  tip: "空の色と太陽・月（0 深夜 / 0.5 正午）" },
+    color: { name: "線の色", def: 0.5,  tip: "色のつながりの中の位置" },
+    speed: { name: "速さ",   def: 0.25, tip: "流れの速さ" },
+    trail: { name: "軌跡",   def: 0.3,  tip: "線が残る長さ" },
+    drift: { name: "向き",   def: 0,    tip: "流される強さ" },
+    heading: { name: "方角", def: 0.75, tip: "流される方角（風向と同じく、風が吹いてくる方角。0.75 で西から東へ）" },
+    swirl: { name: "渦",     def: 0,    tip: "渦の強さ" },
+    width: { name: "太さ",   def: 0.15, tip: "線の太さ" },
+    count: { name: "数",     def: 0.7,  tip: "線の本数" },
+    turb:  { name: "乱れ",   def: 0.3,  tip: "流れの細かさ" }
+  };
+  const OUT_ORDER = Object.keys(OUT_INFO);
+  const IN = { "時刻": "time", "時間": "time", "気温": "temp", "温度": "temp", "音量": "sound", "音": "sound", "照度": "lux", "明るさ": "lux", "風": "wind", "風速": "wind", "風向": "winddir", "雨": "rain", "雲": "cloud", "湿度": "humid", "気配": "presence", "人": "presence", "ゆらぎ": "yuragi" };
+  const IN_LIST = ["時刻", "気温", "音量", "照度", "風", "風向", "雨", "雲", "湿度", "気配", "ゆらぎ"];
+  const MODS = ["反転", "ゆっくり", "段階", "近く", "と", "から"];
+  const COLORS = {
+    "青": [210, 65, 50], "水色": [190, 65, 62], "藍": [228, 55, 38], "緑": [140, 45, 45], "黄": [50, 85, 55],
+    "金": [42, 70, 50], "橙": [25, 85, 55], "赤": [2, 70, 50], "桃": [335, 65, 70], "紫": [275, 45, 52],
+    "茶": [25, 45, 35], "白": [0, 0, 95], "灰": [0, 0, 55], "黒": [0, 0, 12]
+  };
+  const ALL_WORDS = [...Object.keys(OUT), ...Object.keys(IN), ...MODS, ...Object.keys(COLORS)].sort((a, b) => b.length - a.length);
+  const WORD_CAT = {};
+  Object.keys(OUT).forEach((w) => WORD_CAT[w] = "out");
+  Object.keys(IN).forEach((w) => WORD_CAT[w] = "in");
+  MODS.forEach((w) => WORD_CAT[w] = "mod");
+  Object.keys(COLORS).forEach((w) => WORD_CAT[w] = "col");
+  const hsl = (c) => `hsl(${c[0]},${c[1]}%,${c[2]}%)`;
+  const OUT_NAMES = "空・線の色・速さ・軌跡・向き・方角・渦・太さ・数・乱れ";
+  const IN_NAMES = IN_LIST.join("・");
+
+  /* ================= Language: tokenizer & parser ================= */
+  const NUM_RE = /^-?\d+(?:\.\d+)?/;
+  function segment(piece) {
+    const out = [];
+    let i = 0;
+    while (i < piece.length) {
+      const rest = piece.slice(i);
+      const m = rest.match(NUM_RE);
+      if (m) { out.push({ k: "num", v: parseFloat(m[0]) }); i += m[0].length; continue; }
+      const w = ALL_WORDS.find((x) => rest.startsWith(x));
+      if (!w) return { err: rest };
+      out.push({ k: WORD_CAT[w], w });
+      i += w.length;
+    }
+    return { toks: out };
+  }
+  function tokenize(s) {
+    s = s.replace(/[^\s:]*:/g, " ")                    // 「寒い:青」のような見出しは読み飛ばす
+         .replace(/\.{2,}|…|〜|~|→/g, " … ")
+         .replace(/[×*xX+]/g, (c) => ` ${c === "+" ? "+" : "×"} `)
+         .replace(/-(?!\d)/g, " - ")
+         .replace(/(\d)-/g, "$1 -");
+    const toks = [];
+    for (const piece of s.split(/\s+/).filter(Boolean)) {
+      if (piece === "…" || piece === "×" || piece === "+" || piece === "-") { toks.push({ k: "op", w: piece }); continue; }
+      const r = segment(piece);
+      if (r.err) return { err: `「${r.err}」は知らない言葉です` };
+      toks.push(...r.toks);
+    }
+    return { toks };
+  }
+
+  function parseLine(raw) {
+    let line = raw.replace(/[#＃].*$/, "").normalize("NFKC");
+    if (!line.trim()) return null;
+    let left, right;
+    const am = line.match(/<-+|←|⇐|=/);
+    if (am) { left = line.slice(0, am.index); right = line.slice(am.index + am[0].length); }
+    else {
+      const hi = line.indexOf("は");
+      if (hi < 0) return { err: "「表現 ← 環境」の形で書いてください" };
+      left = line.slice(0, hi); right = line.slice(hi + 1);
+    }
+    left = left.replace(/\s+/g, "");
+    if (!left) return { err: "← の左に表現（" + OUT_NAMES + "）を書いてください" };
+    const out = OUT[left];
+    if (!out) return { err: `「${left}」は表現の名前ではありません。使えるのは ${OUT_NAMES}` };
+    const t = tokenize(right);
+    if (t.err) return { err: t.err };
+    const toks = t.toks;
+    if (!toks.length) return { err: "← の右に環境（" + IN_NAMES + "）か数値を書いてください" };
+    const b = { out, sources: [], mods: [], ramp: null, radius: null, text: right.trim().replace(/\s+/g, " "), warns: [] };
+    let i = 0;
+    const peek = () => toks[i];
+    const needNum = (what) => {
+      const n = toks[i];
+      if (!n || n.k !== "num") throw new Error(`${what} の後ろには数値を書きます`);
+      i++; return n.v;
+    };
+    try {
+      // sources
+      for (;;) {
+        const tk = toks[i];
+        if (!tk) throw new Error("「と」の後ろに環境を書いてください");
+        if (tk.k === "in") b.sources.push({ key: IN[tk.w] });
+        else if (tk.k === "num") b.sources.push({ num: tk.v });
+        else throw new Error(`← のすぐ右には環境（${IN_NAMES}）か数値を書きます`);
+        i++;
+        if (peek() && peek().k === "mod" && peek().w === "と") { i++; continue; }
+        break;
+      }
+      // modifiers
+      while (i < toks.length) {
+        const tk = toks[i++];
+        if (tk.k === "mod") {
+          if (tk.w === "反転") b.mods.push({ op: "inv" });
+          else if (tk.w === "ゆっくり") { const n = peek() && peek().k === "num" ? toks[i++].v : 3; b.mods.push({ op: "slow", sec: Math.max(0.1, n), st: null }); }
+          else if (tk.w === "段階") { const n = needNum("段階"); if (n < 2) throw new Error("段階 は 2 以上にしてください"); b.mods.push({ op: "step", n: Math.round(n) }); }
+          else if (tk.w === "近く") { b.radius = clamp(needNum("近く"), 3, 100); if (out !== "swirl") b.warns.push("近く は 渦 のときだけ効きます"); }
+          else if (tk.w === "と") throw new Error("「と」は環境どうしをつなぐときに使います");
+          else throw new Error("「から」は 青 から 橙 のように色をつなぐときに使います");
+        } else if (tk.k === "op") {
+          if (tk.w === "×") b.mods.push({ op: "mul", n: needNum("×") });
+          else if (tk.w === "+") b.mods.push({ op: "add", n: needNum("+") });
+          else if (tk.w === "-") b.mods.push({ op: "add", n: -needNum("-") });
+          else throw new Error("「…」は 青 … 橙 のように色と色の間に置きます");
+        } else if (tk.k === "col") {
+          const ramp = [tk.w];
+          while (peek() && ((peek().k === "op" && peek().w === "…") || (peek().k === "mod" && peek().w === "から"))) {
+            i++;
+            const c = toks[i];
+            if (!c || c.k !== "col") throw new Error("「…」の後ろにも色を書きます");
+            ramp.push(c.w); i++;
+          }
+          if (ramp.length < 2) throw new Error(`色は ${tk.w} … 橙 のように二つ以上つなげます`);
+          if (out !== "color") b.warns.push("色のつながりは 線の色 のときだけ効きます");
+          b.ramp = ramp.map((w) => COLORS[w]);
+        } else if (tk.k === "num") {
+          throw new Error(`数値 ${tk.v} の前に × か + を置いてください`);
+        } else if (tk.k === "in") {
+          throw new Error(`環境どうしは「と」でつなぎます（例：音量 と 風）`);
+        } else if (tk.k === "out") {
+          throw new Error(`「${tk.w}」は表現なので ← の左に書きます`);
+        }
+      }
+    } catch (e) { return { err: e.message }; }
+    return b;
+  }
+
+  let program = {};      // out -> binding
+  let lineState = [];    // per line: "ok" | "bad" | "warn" | null
+  function compile(text) {
+    const lines = text.split("\n");
+    const next = {}, errs = [], states = [];
+    let okCount = 0;
+    lines.forEach((raw, idx) => {
+      const r = parseLine(raw);
+      if (!r) { states.push(null); return; }
+      if (r.err) { states.push("bad"); errs.push({ line: idx + 1, msg: r.err }); return; }
+      if (next[r.out]) errs.push({ line: idx + 1, msg: `${OUT_INFO[r.out].name} はほかの行にもあります。後の行が使われます`, warn: true });
+      r.warns.forEach((w) => errs.push({ line: idx + 1, msg: w, warn: true }));
+      const prev = program[r.out];
+      if (prev && prev.text === r.text) { r.mods.forEach((m, k) => { if (m.op === "slow" && prev.mods[k] && prev.mods[k].op === "slow") m.st = prev.mods[k].st; }); }
+      next[r.out] = r;
+      states.push(r.warns.length ? "warn" : "ok");
+      okCount++;
+    });
+    program = next;
+    lineState = states;
+    const st = $("status");
+    const hard = errs.filter((e) => !e.warn).length;
+    st.className = "status" + (okCount && !hard ? " ok" : "");
+    st.textContent = okCount ? `${okCount} 行の関係が動いています` + (hard ? `（${hard} 行は読めませんでした）` : "") : "まだ関係が書かれていません";
+    $("errs").innerHTML = errs.map((e) => `<li class="${e.warn ? "warn" : ""}"><b>${e.line}行目</b>${esc(e.msg)}</li>`).join("");
+    renderValueRows();
+  }
+
+  /* ================= Editor & highlighting ================= */
+  const HL_RE = new RegExp(`(${ALL_WORDS.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})|([0-9０-９]+(?:[.．][0-9０-９]+)?)|(←|<-+|＜－+|⇐|=|＝)|(…|\\.{2,}|〜|~)|([×*＊+＋\\-－])`, "g");
+  function hlLine(line) {
+    const ci = line.search(/[#＃]/);
+    const code = ci >= 0 ? line.slice(0, ci) : line;
+    const com = ci >= 0 ? line.slice(ci) : "";
+    let html = "", last = 0, m;
+    HL_RE.lastIndex = 0;
+    while ((m = HL_RE.exec(code))) {
+      html += esc(code.slice(last, m.index));
+      const s = esc(m[0]);
+      if (m[1]) {
+        const cat = WORD_CAT[m[1]];
+        html += cat === "col" ? `<span class="t-col" style="--sw:${hsl(COLORS[m[1]])}">${s}</span>` : `<span class="t-${cat}">${s}</span>`;
+      } else if (m[2]) html += `<span class="t-num">${s}</span>`;
+      else if (m[3] || m[4]) html += `<span class="t-arrow">${s}</span>`;
+      else html += `<span class="t-mod">${s}</span>`;
+      last = m.index + m[0].length;
+    }
+    html += esc(code.slice(last));
+    if (com) html += `<span class="t-com">${esc(com)}</span>`;
+    return html || " ";
+  }
+  const src = $("src"), hl = $("hl");
+  function paint() {
+    const lines = src.value.split("\n");
+    hl.innerHTML = lines.map((l, i) => `<span class="ln${lineState[i] === "bad" ? " bad" : ""}">${hlLine(l)}</span>`).join("");
+  }
+  let ct = 0;
+  function onEdit() {
+    paint();
+    clearTimeout(ct);
+    ct = setTimeout(() => { compile(src.value); paint(); try { localStorage.setItem("soyogi-draft", src.value); } catch (e) {} }, 160);
+  }
+  src.addEventListener("input", onEdit);
+  src.addEventListener("keydown", (e) => {
+    if (e.key === "Tab" && !e.shiftKey) { e.preventDefault(); src.setRangeText("  ", src.selectionStart, src.selectionEnd, "end"); onEdit(); }
+  });
+
+  const PRESETS = {
+    window: `# 試作01「環境の窓」をそよぎで書いたもの
+空     ← 時刻
+線の色 ← 気温   青 … 橙
+速さ   ← 音量
+軌跡   ← 照度   反転
+向き   ← 風
+方角   ← 風向     # 実際の天気につなぐと、本物の風の向きに流れる
+渦     ← 気配   近く 22
+`,
+    night: `# 人がいなくても、ゆっくり呼吸するように
+空     ← 0.05
+線の色 ← ゆらぎ   藍 … 紫 … 桃
+速さ   ← ゆらぎ × 0.3
+軌跡   ← 0.9
+太さ   ← ゆらぎ 反転 × 0.6
+渦     ← 気配 ゆっくり 2   近く 35
+`,
+    noise: `# 音がすべてを決める
+空     ← 時刻
+線の色 ← 音量   緑 … 黄 … 赤   段階 4
+速さ   ← 音量 × 1.2
+乱れ   ← 音量 と 風
+数     ← 音量 + 0.3
+軌跡   ← 0.2
+渦     ← 気配
+`
+  };
+  function setText(t) { src.value = t; compile(t); paint(); try { localStorage.setItem("soyogi-draft", t); } catch (e) {} }
+  document.querySelectorAll("[data-preset]").forEach((b) => b.addEventListener("click", () => setText(PRESETS[b.dataset.preset])));
+  $("btn-copy").addEventListener("click", async (e) => {
+    const b = e.currentTarget;
+    try { await navigator.clipboard.writeText(src.value); b.textContent = "コピーしました"; }
+    catch (err) { src.focus(); src.select(); b.textContent = "選択しました"; }
+    setTimeout(() => (b.textContent = "コピー"), 1600);
+  });
+
+  // vocabulary chips
+  const VG = [
+    ["表現（← の左）", Object.values(OUT_INFO).map((o) => [o.name, "out", o.tip])],
+    ["環境（← の右）", IN_LIST.map((w) => [w, "in"])],
+    ["つなぎ・調整", [["←", "mod"], ["と", "mod"], ["反転", "mod"], ["ゆっくり", "mod"], ["×", "mod"], ["+", "mod"], ["段階", "mod"], ["近く", "mod"], ["…", "mod"]]],
+    ["色", Object.keys(COLORS).map((w) => [w, "col"])]
+  ];
+  const vocab = $("vocab");
+  VG.forEach(([title, words]) => {
+    const g = document.createElement("div"); g.className = "vg";
+    g.innerHTML = `<p class="label">${title}</p><div class="words"></div>`;
+    const box = g.querySelector(".words");
+    words.forEach(([w, cat, tip]) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "w " + cat; b.textContent = w;
+      if (tip) b.title = tip;
+      if (cat === "col") b.style.setProperty("--sw", hsl(COLORS[w]));
+      b.addEventListener("click", () => insertWord(w, cat));
+      box.appendChild(b);
+    });
+    vocab.appendChild(g);
+  });
+  function insertWord(w, cat) {
+    const s = src.selectionStart ?? src.value.length, e = src.selectionEnd ?? s;
+    const before = src.value.slice(0, s);
+    let text = w;
+    if (cat === "out" && before && !before.endsWith("\n")) text = "\n" + w;
+    const needSpace = before && !/[\s]$/.test(before) && !text.startsWith("\n");
+    text = (needSpace ? " " : "") + text + " ";
+    src.focus();
+    src.setRangeText(text, s, e, "end");
+    onEdit();
+  }
+
+  /* ================= Live values panel ================= */
+  const valsEl = $("vals");
+  const vrows = {};
+  OUT_ORDER.forEach((k) => {
+    const r = document.createElement("div"); r.className = "vrow off";
+    r.innerHTML = `<span class="nm">${OUT_INFO[k].name}</span><span class="bar"><span></span></span><span class="num">0.00</span><span class="src"></span>`;
+    valsEl.appendChild(r);
+    vrows[k] = { el: r, bar: r.querySelector(".bar span"), num: r.querySelector(".num"), src: r.querySelector(".src") };
+  });
+  function renderValueRows() {
+    OUT_ORDER.forEach((k) => {
+      const b = program[k], v = vrows[k];
+      v.el.classList.toggle("off", !b);
+      v.src.textContent = b ? "← " + b.text : "書かれていないので既定の値";
+    });
+  }
+
+  /* ================= Environment (simulation, same as 試作01) ================= */
+  const time = { mode: "real", manual: 12 };
+  function hourNow() {
+    if (time.mode === "manual") return time.manual;
+    const d = new Date();
+    return d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+  }
+  const S = {
+    temp:  { label: "気温", unit: "°C", min: -5, max: 35, step: 0.1, spread: 1.6, dec: 1 },
+    sound: { label: "音量", unit: "dB", min: 30, max: 90, step: 1, spread: 5, dec: 0 },
+    lux:   { label: "照度", unit: "lx", min: 0, max: 1000, step: 1, spread: 0, dec: 0 },
+    wind:  { label: "風",   unit: "m/s", min: 0, max: 10, step: 0.1, spread: 1.5, dec: 1 },
+    winddir: { label: "風向", unit: "°", min: 0, max: 360, step: 1, spread: 25, dec: 0 },
+    rain:  { label: "雨",   unit: "mm/h", min: 0, max: 20, step: 0.1, spread: 0, dec: 1 },
+    cloud: { label: "雲",   unit: "%", min: 0, max: 100, step: 1, spread: 20, dec: 0 },
+    humid: { label: "湿度", unit: "%", min: 0, max: 100, step: 1, spread: 8, dec: 0 }
+  };
+  const WEATHER_KEYS = ["temp", "wind", "winddir", "rain", "cloud", "humid"];
+  const KEYS = Object.keys(S);
+  function baseline(key, h) {
+    switch (key) {
+      case "temp": return 15 + 7 * Math.sin(2 * Math.PI * (h - 9) / 24);
+      case "sound": return (h > 7 && h < 22) ? 48 : 36;
+      case "lux": if (h >= 7 && h < 17) return 520; if ((h >= 5.5 && h < 7) || (h >= 17 && h < 19)) return 160; return 45;
+      case "winddir": return 270;
+      case "cloud": return 40;
+      case "humid": return 60;
+      case "rain": return 0;
+      default: return 2.4;
+    }
+  }
+  function newTarget(key) {
+    const s = S[key], h = hourNow();
+    let v;
+    if (key === "lux") v = baseline("lux", h) * Math.exp(randn() * 0.35);
+    else if (key === "sound" && Math.random() < 0.12) v = 62 + Math.random() * 16;
+    else if (key === "rain") v = Math.random() < 0.08 ? 0.5 + Math.random() * 3 : 0;
+    else v = baseline(key, h) + randn() * s.spread;
+    s.target = clamp(v, s.min, s.max);
+  }
+  KEYS.forEach((k) => { S[k].mode = "auto"; newTarget(k); S[k].value = S[k].target; });
+  setInterval(() => KEYS.forEach((k) => { if (S[k].mode === "auto" && Math.random() < 0.6) newTarget(k); }), 3200);
+  const presence = { x: -1e5, y: -1e5, p: 0, last: -1e9 };
+
+  // env rows
+  const envRows = $("env-rows");
+  envRows.innerHTML =
+    `<div class="erow"><label class="nm" for="in-time">時刻</label><span class="chip" id="chip-time" data-kind="real">実時刻</span><input type="range" id="in-time" min="0" max="24" step="0.05" value="12"><span class="num" id="num-time">--:--</span></div>` +
+    KEYS.map((k) => `<div class="erow"><label class="nm" for="in-${k}">${S[k].label}</label><span class="chip" id="chip-${k}" data-kind="sim">シミュ</span><input type="range" id="in-${k}" min="${S[k].min}" max="${S[k].max}" step="${S[k].step}"><span class="num"><span id="num-${k}">--</span> ${S[k].unit}</span></div>`).join("") +
+    `<div class="erow"><span class="nm">気配</span><span class="chip" data-kind="real">ポインタ</span><span class="meter"><span id="bar-presence"></span></span><span class="num" id="num-presence">なし</span></div>`;
+  KEYS.forEach((k) => {
+    const inp = $("in-" + k);
+    inp.addEventListener("input", () => { const s = S[k]; s.mode = "manual"; s.value = s.target = parseFloat(inp.value); uiTick(); });
+  });
+  $("in-time").addEventListener("input", (e) => { time.mode = "manual"; time.manual = parseFloat(e.target.value); uiTick(); });
+  $("btn-now").addEventListener("click", () => { time.mode = "real"; uiTick(); });
+  $("btn-auto").addEventListener("click", () => {
+    KEYS.forEach((k) => {
+      if (S[k].mode !== "manual") return;
+      if (weather.connected && WEATHER_KEYS.includes(k)) { S[k].mode = "weather"; S[k].target = weather.values[k]; }
+      else { S[k].mode = "auto"; newTarget(k); }
+    });
+    uiTick();
+  });
+
+  /* ================= Noise ================= */
+  const perm = new Uint8Array(512);
+  { const p = Array.from({ length: 256 }, (_, i) => i);
+    for (let i = 255; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [p[i], p[j]] = [p[j], p[i]]; }
+    for (let i = 0; i < 512; i++) perm[i] = p[i & 255]; }
+  const fade = (t) => t * t * t * (t * (t * 6 - 15) + 10);
+  const grad = (h, x, y, z) => { const u = h < 8 ? x : y, v = h < 4 ? y : (h === 12 || h === 14 ? x : z); return ((h & 1) ? -u : u) + ((h & 2) ? -v : v); };
+  function noise(x, y, z) {
+    const fx = Math.floor(x), fy = Math.floor(y), fz = Math.floor(z);
+    const X = fx & 255, Y = fy & 255, Z = fz & 255;
+    x -= fx; y -= fy; z -= fz;
+    const u = fade(x), v = fade(y), w = fade(z);
+    const A = perm[X] + Y, AA = perm[A] + Z, AB = perm[A + 1] + Z, B = perm[X + 1] + Y, BA = perm[B] + Z, BB = perm[B + 1] + Z;
+    return lerp(lerp(lerp(grad(perm[AA] & 15, x, y, z), grad(perm[BA] & 15, x - 1, y, z), u), lerp(grad(perm[AB] & 15, x, y - 1, z), grad(perm[BB] & 15, x - 1, y - 1, z), u), v),
+                lerp(lerp(grad(perm[AA + 1] & 15, x, y, z - 1), grad(perm[BA + 1] & 15, x - 1, y, z - 1), u), lerp(grad(perm[AB + 1] & 15, x, y - 1, z - 1), grad(perm[BB + 1] & 15, x - 1, y - 1, z - 1), u), v), w);
+  }
+
+  /* ================= Evaluate program ================= */
+  function envValues(tSec) {
+    return {
+      time: (((hourNow() % 24) + 24) % 24) / 24,
+      temp: clamp((S.temp.value + 5) / 40, 0, 1),
+      sound: clamp((S.sound.value - 30) / 60, 0, 1),
+      lux: clamp(Math.log10(S.lux.value + 1) / 3, 0, 1),
+      wind: clamp(S.wind.value / 10, 0, 1),
+      winddir: clamp(S.winddir.value / 360, 0, 1),
+      rain: clamp(Math.log10(1 + S.rain.value) / Math.log10(21), 0, 1),
+      cloud: clamp(S.cloud.value / 100, 0, 1),
+      humid: clamp(S.humid.value / 100, 0, 1),
+      presence: presence.p,
+      yuragi: clamp(0.5 + noise(tSec * 0.035, 3.7, 9.1) * 1.1, 0, 1)
+    };
+  }
+  function evalBinding(b, env, dtSec) {
+    let v = 0;
+    for (const s of b.sources) v += s.key ? env[s.key] : s.num;
+    v /= b.sources.length;
+    for (const m of b.mods) {
+      if (m.op === "inv") v = 1 - v;
+      else if (m.op === "mul") v *= m.n;
+      else if (m.op === "add") v += m.n;
+      else if (m.op === "step") { v = clamp(v, 0, 1); v = Math.round(v * (m.n - 1)) / (m.n - 1); }
+      else if (m.op === "slow") { m.st = m.st == null ? v : m.st + (v - m.st) * (1 - Math.exp(-dtSec / m.sec)); v = m.st; }
+    }
+    return clamp(v, 0, 1);
+  }
+  const P = {};
+  OUT_ORDER.forEach((k) => (P[k] = OUT_INFO[k].def));
+  let ENV = envValues(0);
+
+  /* ================= Drawing ================= */
+  const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const SKY = [[0, "#0b1026", "#1b2447"], [4.5, "#1b1f4e", "#4e4372"], [6, "#4b5c98", "#e3a79e"], [8, "#86acd4", "#f0dbbf"], [12, "#9fc6e7", "#e9f0f0"], [16, "#88a5cf", "#f1d8b6"], [18, "#5a69a4", "#eea57e"], [19.5, "#2d2e62", "#985b78"], [21, "#141a40", "#2a2f58"], [24, "#0b1026", "#1b2447"]].map(([h, a, b]) => [h, hex(a), hex(b)]);
+  const mixc = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+  const rgb = (c) => `rgb(${c[0] | 0},${c[1] | 0},${c[2] | 0})`;
+  const lumOf = (c) => (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
+  function sky(h) {
+    h = ((h % 24) + 24) % 24;
+    let i = 0;
+    while (i < SKY.length - 2 && h >= SKY[i + 1][0]) i++;
+    const a = SKY[i], b = SKY[i + 1];
+    let t = (h - a[0]) / (b[0] - a[0]); t = t * t * (3 - 2 * t);
+    return { top: mixc(a[1], b[1], t), bot: mixc(a[2], b[2], t) };
+  }
+  function rampColor(ramp, t) {
+    const n = ramp.length - 1, x = clamp(t, 0, 1) * n, i = Math.min(n - 1, Math.floor(x)), f = x - i;
+    const a = ramp[i], b = ramp[i + 1];
+    const ha = a[1] === 0 ? b[0] : a[0], hb = b[1] === 0 ? a[0] : b[0];
+    return [lerp(ha, hb, f), lerp(a[1], b[1], f), lerp(a[2], b[2], f)];
+  }
+  const DEFAULT_RAMP = [COLORS["青"], COLORS["橙"]];
+
+  const stage = $("stage"), cv = $("cv"), ctx = cv.getContext("2d");
+  let W = 1, H = 1, N = 0, px, py, life, tz = Math.random() * 100, windOff = 0, tSec = 0;
+  function seed(i) { px[i] = Math.random() * W; py[i] = Math.random() * H; life[i] = 60 + Math.random() * 260; }
+  function paintSky(sk, alpha) {
+    const g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, rgb(sk.top)); g.addColorStop(1, rgb(sk.bot));
+    ctx.globalAlpha = alpha; ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1;
+  }
+  function drawOrb(h, alpha) {
+    h = ((h % 24) + 24) % 24;
+    const isSun = h >= 6 && h < 18;
+    const t = isSun ? (h - 6) / 12 : ((h >= 18 ? h - 18 : h + 6) / 12);
+    const md = Math.min(W, H), x = W * (0.08 + 0.84 * t), y = H * (0.84 - 0.62 * Math.sin(Math.PI * t)), r = 0.055 * md;
+    const c = isSun ? "255,240,214" : "226,232,246";
+    const rg = ctx.createRadialGradient(x, y, 0, x, y, r * 2.6);
+    rg.addColorStop(0, `rgba(${c},1)`); rg.addColorStop(0.3, `rgba(${c},0.85)`); rg.addColorStop(1, `rgba(${c},0)`);
+    ctx.globalAlpha = alpha * (isSun ? 0.9 : 0.75); ctx.fillStyle = rg;
+    ctx.fillRect(x - r * 2.6, y - r * 2.6, r * 5.2, r * 5.2); ctx.globalAlpha = 1;
+  }
+
+  function step(dtf) {
+    const h = P.sky * 24, sk = sky(h);
+    const lum = (lumOf(sk.top) + lumOf(sk.bot)) / 2;
+    const fadeA = clamp((0.012 + 0.07 * (1 - P.trail)) * dtf, 0, 0.3);
+    paintSky(sk, fadeA);
+    drawOrb(h, fadeA);
+
+    const slow = reduce ? 0.3 : 1, md = Math.min(W, H), scale = clamp(md / 600, 0.7, 1.6);
+    const speed = (0.45 + P.speed * 2.8) * slow * dtf * scale;
+    tz += (0.0007 + P.speed * 0.0045) * slow * dtf;
+    const w = P.drift;
+    windOff += w * 0.006 * slow * dtf;
+    const ns = (0.6 + P.turb * 4.7) * 1.2 / md;
+
+    const pr = P.swirl;
+    const sb = program.swirl;
+    const R = ((sb && sb.radius) || 22) / 100 * md, R2 = R * R;
+    let qx, qy;
+    if (performance.now() - presence.last < 3000) { qx = presence.x; qy = presence.y; }
+    else { qx = W * (0.5 + 0.28 * Math.sin(tSec * 0.07)); qy = H * (0.5 + 0.22 * Math.cos(tSec * 0.053)); }
+    const turn = 1 - 0.65 * w;
+    const toRad = (P.heading * 360 + 180) * Math.PI / 180, hx = Math.sin(toRad), hy = -Math.cos(toRad);
+    const active = Math.round(N * (0.12 + 0.88 * P.count));
+    const paths = [new Path2D(), new Path2D(), new Path2D()];
+    for (let i = 0; i < active; i++) {
+      const x = px[i], y = py[i];
+      const a = noise(x * ns + windOff, y * ns, tz) * Math.PI * 2.4;
+      const wob = w * 0.15 * Math.sin(tz * 7 + (x + y) * ns);
+      let vx = Math.cos(a) * turn + w * 1.25 * hx - hy * wob;
+      let vy = Math.sin(a) * turn + w * 1.25 * hy + hx * wob;
+      if (pr > 0.01) {
+        const dx = x - qx, dy = y - qy, d2 = dx * dx + dy * dy;
+        if (d2 < R2) {
+          const d = Math.sqrt(d2) + 0.001, f = 1 - d / R, s = f * f * pr * 3;
+          vx += (-dy / d) * s + (dx / d) * s * 0.25;
+          vy += (dx / d) * s + (dy / d) * s * 0.25;
+        }
+      }
+      const len = Math.hypot(vx, vy) || 1;
+      const nx = x + (vx / len) * speed, ny = y + (vy / len) * speed;
+      life[i] -= dtf;
+      if (life[i] <= 0 || nx < -2 || ny < -2 || nx > W + 2 || ny > H + 2) { seed(i); continue; }
+      const p = paths[i % 3]; p.moveTo(x, y); p.lineTo(nx, ny);
+      px[i] = nx; py[i] = ny;
+    }
+    const cb = program.color;
+    const c = rampColor((cb && cb.ramp) || DEFAULT_RAMP, P.color);
+    const dk = clamp((0.58 - lum) / 0.2, 0, 1);
+    const Lc = 28 + 50 * dk;
+    const L = clamp(c[2] + (Lc - 50) * 0.85, 12, 92);
+    ctx.lineWidth = 0.5 + P.width * 4;
+    ctx.lineCap = "round";
+    for (let g = 0; g < 3; g++) {
+      ctx.strokeStyle = `hsla(${(c[0] + (g - 1) * 12).toFixed(1)},${c[1].toFixed(0)}%,${clamp(L + (g - 1) * 6, 5, 96).toFixed(0)}%,0.52)`;
+      ctx.stroke(paths[g]);
+    }
+  }
+
+  function resize() {
+    const r = stage.getBoundingClientRect();
+    if (r.width < 2 || r.height < 2) return;
+    W = r.width; H = r.height;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    N = Math.round(clamp((W * H) / 520, 400, 1900) * (reduce ? 0.6 : 1));
+    px = new Float32Array(N); py = new Float32Array(N); life = new Float32Array(N);
+    for (let i = 0; i < N; i++) seed(i);
+    paintSky(sky(P.sky * 24), 1);
+    for (let i = 0; i < 90; i++) step(1);
+  }
+  let rz = 0;
+  if ("ResizeObserver" in window) new ResizeObserver(() => { cancelAnimationFrame(rz); rz = requestAnimationFrame(resize); }).observe(stage);
+  else window.addEventListener("resize", resize);
+
+  function onPointer(e) {
+    const r = cv.getBoundingClientRect();
+    presence.x = e.clientX - r.left; presence.y = e.clientY - r.top;
+    presence.p = Math.min(1, presence.p + 0.08); presence.last = performance.now();
+  }
+  cv.addEventListener("pointermove", onPointer);
+  cv.addEventListener("pointerdown", onPointer);
+
+  let last = performance.now();
+  function frame(now) {
+    const dtf = clamp((now - last) / 16.667, 0.2, 3), dtSec = dtf / 60;
+    last = now; tSec += dtSec;
+    const ease = 1 - Math.pow(0.994, dtf);
+    KEYS.forEach((k) => { const s = S[k]; if (s.mode !== "manual") s.value += (s.target - s.value) * ease; });
+    if (now - presence.last > 500) presence.p = Math.max(0, presence.p - 0.006 * dtf);
+    ENV = envValues(tSec);
+    OUT_ORDER.forEach((k) => {
+      const b = program[k];
+      const target = b ? evalBinding(b, ENV, dtSec) : OUT_INFO[k].def;
+      P[k] += (target - P[k]) * (1 - Math.pow(0.85, dtf));   // 書き換えた瞬間も絵がなめらかにつながるように
+    });
+    if (N > 0) step(dtf);
+    requestAnimationFrame(frame);
+  }
+
+  /* ================= Panel tick ================= */
+  const words = {
+    time: (h) => h < 4 ? "深夜" : h < 6 ? "明け方" : h < 10 ? "朝" : h < 15 ? "昼" : h < 18.5 ? "夕方" : h < 21 ? "宵" : "夜",
+    temp: (v) => v < 5 ? "凍える" : v < 12 ? "肌寒い" : v < 20 ? "ほどよい" : v < 27 ? "あたたかい" : "暑い",
+    sound: (v) => v < 40 ? "静か" : v < 55 ? "おだやか" : v < 70 ? "にぎやか" : "騒がしい",
+    lux: (v) => v < 20 ? "暗い" : v < 200 ? "ほの明るい" : v < 600 ? "明るい" : "まぶしい",
+    wind: (v) => v < 0.8 ? "無風" : v < 4 ? "そよ風" : v < 7 ? "風がある" : "強い風"
+  };
+  const pad = (n) => String(n).padStart(2, "0");
+  function setChip(el, kind, text) { if (el.dataset.kind !== kind) el.dataset.kind = kind; if (el.textContent !== text) el.textContent = text; }
+  function uiTick() {
+    const h = ((hourNow() % 24) + 24) % 24;
+    $("num-time").textContent = `${pad(Math.floor(h))}:${pad(Math.floor((h % 1) * 60))}`;
+    if (time.mode === "real") $("in-time").value = h.toFixed(2);
+    setChip($("chip-time"), time.mode === "real" ? "real" : "manual", time.mode === "real" ? "実時刻" : "手動");
+    KEYS.forEach((k) => {
+      const s = S[k];
+      $("num-" + k).textContent = s.value.toFixed(s.dec);
+      if (s.mode === "auto") $("in-" + k).value = s.value.toFixed(s.dec);
+      setChip($("chip-" + k), s.mode === "auto" ? "sim" : s.mode === "weather" ? "real" : "manual", s.mode === "auto" ? "シミュ" : s.mode === "weather" ? "実測" : "手動");
+    });
+    const here = presence.p > 0.15;
+    $("num-presence").textContent = here ? "あり" : "なし";
+    $("bar-presence").style.width = (presence.p * 100).toFixed(0) + "%";
+    $("btn-now").disabled = time.mode === "real";
+    $("btn-auto").disabled = KEYS.every((k) => S[k].mode !== "manual");
+    const parts = [words.time(h), words.temp(S.temp.value), words.sound(S.sound.value), words.lux(S.lux.value), words.wind(S.wind.value)];
+    if (S.rain.value > 0.2) parts.push("雨");
+    if (here) parts.push("誰かがいる");
+    $("cap-text").textContent = parts.join("・");
+    OUT_ORDER.forEach((k) => { const v = vrows[k]; v.bar.style.width = (P[k] * 100).toFixed(1) + "%"; v.num.textContent = P[k].toFixed(2); });
+  }
+
+  /* ================= Weather (Open-Meteo) ================= */
+  const weather = { connected: false, values: {}, timer: 0, req: 0 };
+  function setW(text, kind) { const el = $("wx-status"); el.textContent = text; el.className = "wx-status" + (kind ? " " + kind : ""); }
+  async function getJSON(url) {
+    const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 12000);
+    try { const r = await fetch(url, { signal: ctl.signal }); if (!r.ok) throw new Error("http " + r.status); return await r.json(); }
+    finally { clearTimeout(to); }
+  }
+  function blocked() {
+    setW("外のサイトにつながりませんでした。claude.ai の中で開いている場合は通信が止められています。HTMLファイルを自分のブラウザで開くと実際の天気を使えます。いまはシミュレーションで動いています。", "err");
+  }
+  async function connect(lat, lon, label, quiet) {
+    const my = ++weather.req;
+    if (!quiet) setW(`${label}の天気を取得しています…`);
+    try {
+      const d = await getJSON(`https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&current=temperature_2m,relative_humidity_2m,precipitation,cloud_cover,wind_speed_10m,wind_direction_10m&wind_speed_unit=ms&timezone=auto`);
+      if (my !== weather.req) return;
+      const c = d.current || {};
+      const map = { temp: c.temperature_2m, wind: c.wind_speed_10m, winddir: c.wind_direction_10m, rain: c.precipitation, cloud: c.cloud_cover, humid: c.relative_humidity_2m };
+      WEATHER_KEYS.forEach((k) => {
+        if (typeof map[k] !== "number") return;
+        const v = clamp(map[k], S[k].min, S[k].max);
+        weather.values[k] = v;
+        if (S[k].mode !== "manual") { S[k].mode = "weather"; S[k].target = v; }
+      });
+      weather.connected = true;
+      const t = (c.time || "").slice(11, 16);
+      setW(`${label}の天気につながっています（${t ? t + " 時点、" : ""}10分ごとに更新）。気温 ${map.temp}°C・風 ${map.wind} m/s・風向 ${map.winddir}°・雲 ${map.cloud}%`, "ok");
+      clearInterval(weather.timer);
+      weather.timer = setInterval(() => connect(lat, lon, label, true), 10 * 60 * 1000);
+      uiTick();
+    } catch (e) { if (my === weather.req && !weather.connected) blocked(); }
+  }
+  async function connectByCity(name) {
+    name = name.trim();
+    if (!name) { setW("都市名を入れてください", "err"); return; }
+    setW(`「${name}」を探しています…`);
+    try {
+      const g = await getJSON(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=ja&format=json`);
+      const r = g.results && g.results[0];
+      if (!r) { setW(`「${name}」が見つかりませんでした。別の書き方（ローマ字など）も試してください`, "err"); return; }
+      try { localStorage.setItem("soyogi-place", name); } catch (e) {}
+      await connect(r.latitude, r.longitude, r.name || name);
+    } catch (e) { blocked(); }
+  }
+  function connectHere() {
+    if (!navigator.geolocation) { setW("この環境では現在地を使えません。都市名を入れてください", "err"); return; }
+    setW("現在地を確認しています…");
+    navigator.geolocation.getCurrentPosition(
+      (p) => { try { localStorage.setItem("soyogi-place", "@here"); } catch (e) {} connect(p.coords.latitude, p.coords.longitude, "現在地"); },
+      () => setW("現在地を使えませんでした（許可されていないか、claude.ai の中で開いています）。都市名を入れてください", "err"),
+      { timeout: 10000, maximumAge: 600000 }
+    );
+  }
+  $("wx-form").addEventListener("submit", (e) => { e.preventDefault(); connectByCity($("wx-city").value); });
+  $("wx-here").addEventListener("click", connectHere);
+  try {
+    const place = localStorage.getItem("soyogi-place");
+    if (place === "@here") connectHere();
+    else if (place) { $("wx-city").value = place; connectByCity(place); }
+  } catch (e) {}
+
+  /* ================= Start ================= */
+  let initial = PRESETS.window;
+  try { const d = localStorage.getItem("soyogi-draft"); if (d && d.trim()) initial = d; } catch (e) {}
+  src.value = initial;
+  compile(initial);
+  paint();
+  resize();
+  uiTick();
+  setInterval(uiTick, 250);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
