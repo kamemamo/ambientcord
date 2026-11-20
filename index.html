@@ -245,7 +245,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
       <li>右に言葉を足すと値が変わります。<code>反転</code>・<code>× 0.5</code>・<code>+ 0.2</code>・<code>段階 4</code>・<code>ゆっくり</code>、線の色には <code>青 … 橙</code> のような色のつながり、渦には <code>近く 30</code>。</li>
     </ol>
     <p>すべての値は 0 から 1 の間に揃えてから表現に渡します。<code>#</code> から後ろはメモとして読み飛ばします。</p>
-    <p>何も書かなければ、何も描かれません。<code>空</code> を書くと空の色が、<code>光</code> を書くと太陽・月が、線の言葉（線の色・速さ・軌跡・向き・方角・渦・太さ・数・乱れ）を一つでも書くと流れが現れます。書かなかった言葉は既定の値で動きます。行を消すと、その部分はゆっくり消えていきます。</p>
+    <p>何も書かなければ、何も描かれません。<code>空</code> を書くと空の色が、<code>光</code> を書くと太陽・月が、<code>粒</code> を書くと流れに漂う粒が、線の言葉（線の色・速さ・軌跡・向き・方角・渦・太さ・数・乱れ）を一つでも書くと流れが現れます。書かなかった言葉は既定の値で動きます。行を消すと、その部分はゆっくり消えていきます。</p>
     <h2>実際の天気について</h2>
     <p>気温・風・風向・雨・雲・湿度は、Open-Meteo の気象データにつなぐと実際の値になります（10分ごとに更新）。claude.ai の中で開いているときは外への通信が止められているので、シミュレーションの値で動きます。このHTMLファイルを自分のブラウザや Raspberry Pi の画面で開くと、そのまま実際の天気に反応します。音量はマイク、照度は照度センサーかカメラにつなげます。</p>
     <h2>マイクについて</h2>
@@ -270,10 +270,11 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
   const view = { show: false, cap: false, lite: false, fs: false };   // 展示モードの状態
 
   /* ================= Language: vocabulary ================= */
-  const OUT = { "空の色": "sky", "空": "sky", "光": "orb", "線の色": "color", "色": "color", "速さ": "speed", "軌跡": "trail", "向き": "drift", "方角": "heading", "渦": "swirl", "太さ": "width", "数": "count", "乱れ": "turb" };
+  const OUT = { "空の色": "sky", "空": "sky", "光": "orb", "粒": "grain", "線の色": "color", "色": "color", "速さ": "speed", "軌跡": "trail", "向き": "drift", "方角": "heading", "渦": "swirl", "太さ": "width", "数": "count", "乱れ": "turb" };
   const OUT_INFO = {
     sky:   { name: "空",     def: 0.5,  tip: "空の色（0 深夜 / 0.5 正午）" },
     orb:   { name: "光",     def: 0.5,  tip: "太陽・月の位置（0 深夜 / 0.5 正午）" },
+    grain: { name: "粒",     def: 0.5,  tip: "流れに漂う粒の多さ" },
     color: { name: "線の色", def: 0.5,  tip: "色のつながりの中の位置" },
     speed: { name: "速さ",   def: 0.25, tip: "流れの速さ" },
     trail: { name: "軌跡",   def: 0.3,  tip: "線が残る長さ" },
@@ -300,7 +301,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
   MODS.forEach((w) => WORD_CAT[w] = "mod");
   Object.keys(COLORS).forEach((w) => WORD_CAT[w] = "col");
   const hsl = (c) => `hsl(${c[0]},${c[1]}%,${c[2]}%)`;
-  const OUT_NAMES = "空・光・線の色・速さ・軌跡・向き・方角・渦・太さ・数・乱れ";
+  const OUT_NAMES = "空・光・粒・線の色・速さ・軌跡・向き・方角・渦・太さ・数・乱れ";
   const IN_NAMES = IN_LIST.join("・");
 
   /* ================= Language: tokenizer & parser ================= */
@@ -493,6 +494,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     night: `# 人がいなくても、ゆっくり呼吸するように
 空     ← 0.05
 光     ← 0.05     # 月
+粒     ← ゆらぎ 反転   # 夜の塵
 線の色 ← ゆらぎ   藍 … 紫 … 桃
 速さ   ← ゆらぎ × 0.3
 軌跡   ← 0.9
@@ -570,6 +572,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
       v.src.textContent = b ? "← " + b.text
         : k === "sky" ? "書かれていないので、空はありません"
         : k === "orb" ? "書かれていないので、太陽・月はありません"
+        : k === "grain" ? "書かれていないので、粒はありません"
         : !flowOn ? "線の言葉が書かれていないので、流れはありません"
         : "書かれていないので既定の値";
     });
@@ -714,14 +717,23 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
   }
   const DEFAULT_RAMP = [COLORS["青"], COLORS["橙"]];
   const VOID = [9, 11, 10];   // 何も書かれていないときの色
-  const FLOW_KEYS = OUT_ORDER.filter((k) => k !== "sky" && k !== "orb");
-  const layerTarget = () => ({ sky: program.sky ? 1 : 0, orb: program.orb ? 1 : 0, flow: FLOW_KEYS.some((k) => program[k]) ? 1 : 0 });
-  const layer = { sky: 0, orb: 0, flow: 0 };
+  const FLOW_KEYS = OUT_ORDER.filter((k) => k !== "sky" && k !== "orb" && k !== "grain");
+  const layerTarget = () => ({ sky: program.sky ? 1 : 0, orb: program.orb ? 1 : 0, grain: program.grain ? 1 : 0, flow: FLOW_KEYS.some((k) => program[k]) ? 1 : 0 });
+  const layer = { sky: 0, orb: 0, grain: 0, flow: 0 };
 
   const stage = $("stage"), cv = $("cv"), ctx = cv.getContext("2d");
   let W = 1, H = 1, N = 0, px, py, life, spd, tz = Math.random() * 100, windOff = 0, tSec = 0;
   // 線ごとに少しずつ速さを変えて、同じ速さで並んで流れないようにする
   function seed(i) { px[i] = Math.random() * W; py[i] = Math.random() * H; life[i] = 60 + Math.random() * 260; spd[i] = 0.55 + Math.random() * 0.9; }
+  // 粒：大きさ・速さ・瞬きの速さを一粒ずつ変える
+  let G = 0, gx, gy, glife, gmax, gsp, gsz, gtw, gph;
+  function seedGrain(i) {
+    gx[i] = Math.random() * W; gy[i] = Math.random() * H;
+    gmax[i] = glife[i] = 240 + Math.random() * 900;
+    gsp[i] = 0.4 + Math.random() * 1.2;
+    gsz[i] = 0.7 + Math.pow(Math.random(), 2.2) * 2.6;   // 小さい粒が多く、大きい粒はまれ
+    gtw[i] = 0.3 + Math.random() * 1.8; gph[i] = Math.random() * Math.PI * 2;
+  }
 
   /* うねり：ときどき、どこかに大きな渦が生まれ、ゆっくり動いて消える。
      いつ・どこに・どちら回りで来るかは決まっていないので、流れの先が読めなくなる。 */
@@ -776,8 +788,9 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     const fadeA = clamp((0.012 + 0.07 * (1 - P.trail) + 0.2 * (1 - layer.flow)) * dtf, 0, 0.3);
     paintSky(sk, fadeA);
     if (layer.orb > 0.01) drawOrb(P.orb * 24, fadeA * layer.orb);
-    if (layer.flow < 0.005) return;
+    if (layer.flow < 0.005 && layer.grain < 0.005) return;
 
+    /* ---- 流れの場：線と粒が同じ流れに乗る ---- */
     const slow = reduce ? 0.3 : 1, md = Math.min(W, H), scale = clamp(md / 600, 0.7, 1.6);
     const speed = (0.45 + P.speed * 2.8) * slow * dtf * scale;
     tz += (0.0007 + P.speed * 0.0045) * slow * dtf;
@@ -799,10 +812,10 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     else { sx = W * (0.5 + 0.28 * Math.sin(tSec * 0.07)); sy = H * (0.5 + 0.22 * Math.cos(tSec * 0.053)); }
     const turn = 1 - 0.65 * w;
     const toRad = (P.heading * 360 + 180) * Math.PI / 180, hx = Math.sin(toRad), hy = -Math.cos(toRad);
-    const active = Math.round(N * (0.12 + 0.88 * P.count));
-    const paths = [new Path2D(), new Path2D(), new Path2D()];
-    for (let i = 0; i < active; i++) {
-      const x = px[i], y = py[i];
+
+    // (x, y) での流れの向き (fx, fy：長さ 1) と、その場所の速さの倍率 (fs) を求める
+    let fx = 0, fy = 0, fs = 1;
+    function field(x, y) {
       // 大きな流れで座標をねじってから向きを決める（ドメインワーピング）。模様が同じ形に落ち着かない
       const qx = noise(x * wsc + 5.2, y * wsc + 1.3, t2), qy = noise(x * wsc + 9.7, y * wsc + 6.1, t2);
       const a = noise(x * ns + windOff + qx * warp, y * ns + qy * warp, tz) * Math.PI * 2.4 + rot;
@@ -825,24 +838,64 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
         }
       }
       const len = Math.hypot(vx, vy) || 1;
-      // 線ごとの速さに加えて、速く流れる所と淀む所をつくる
-      const sp = speed * spd[i] * Math.max(0.3, 0.65 + 0.7 * (0.5 + qy));
-      const nx = x + (vx / len) * sp, ny = y + (vy / len) * sp;
-      life[i] -= dtf;
-      if (life[i] <= 0 || nx < -2 || ny < -2 || nx > W + 2 || ny > H + 2) { seed(i); continue; }
-      const p = paths[i % 3]; p.moveTo(x, y); p.lineTo(nx, ny);
-      px[i] = nx; py[i] = ny;
+      fx = vx / len; fy = vy / len;
+      fs = Math.max(0.3, 0.65 + 0.7 * (0.5 + qy));   // 速く流れる所と淀む所
     }
+
     const cb = program.color;
     const c = rampColor((cb && cb.ramp) || DEFAULT_RAMP, P.color);
     const dk = clamp((0.58 - lum) / 0.2, 0, 1);
-    const Lc = 28 + 50 * dk;
-    const L = clamp(c[2] + (Lc - 50) * 0.85, 12, 92);
-    ctx.lineWidth = 0.5 + P.width * 4;
-    ctx.lineCap = "round";
-    for (let g = 0; g < 3; g++) {
-      ctx.strokeStyle = `hsla(${(c[0] + (g - 1) * 12).toFixed(1)},${c[1].toFixed(0)}%,${clamp(L + (g - 1) * 6, 5, 96).toFixed(0)}%,${(0.52 * layer.flow).toFixed(3)})`;
-      ctx.stroke(paths[g]);
+
+    /* ---- 線 ---- */
+    if (layer.flow >= 0.005) {
+      const active = Math.round(N * (0.12 + 0.88 * P.count));
+      const paths = [new Path2D(), new Path2D(), new Path2D()];
+      for (let i = 0; i < active; i++) {
+        const x = px[i], y = py[i];
+        field(x, y);
+        const sp = speed * spd[i] * fs;   // 線ごとの速さ × 場所の速さ
+        const nx = x + fx * sp, ny = y + fy * sp;
+        life[i] -= dtf;
+        if (life[i] <= 0 || nx < -2 || ny < -2 || nx > W + 2 || ny > H + 2) { seed(i); continue; }
+        const p = paths[i % 3]; p.moveTo(x, y); p.lineTo(nx, ny);
+        px[i] = nx; py[i] = ny;
+      }
+      const Lc = 28 + 50 * dk;
+      const L = clamp(c[2] + (Lc - 50) * 0.85, 12, 92);
+      ctx.lineWidth = 0.5 + P.width * 4;
+      ctx.lineCap = "round";
+      for (let g = 0; g < 3; g++) {
+        ctx.strokeStyle = `hsla(${(c[0] + (g - 1) * 12).toFixed(1)},${c[1].toFixed(0)}%,${clamp(L + (g - 1) * 6, 5, 96).toFixed(0)}%,${(0.52 * layer.flow).toFixed(3)})`;
+        ctx.stroke(paths[g]);
+      }
+    }
+
+    /* ---- 粒：線より遅く漂い、ひとつずつ明滅する ---- */
+    if (layer.grain >= 0.005) {
+      const shown = Math.round(G * P.grain);
+      const paths = [new Path2D(), new Path2D(), new Path2D()];   // 明るさ 3 段
+      for (let i = 0; i < shown; i++) {
+        const x = gx[i], y = gy[i];
+        field(x, y);
+        const sp = speed * 0.32 * gsp[i] * fs;
+        const nx = x + fx * sp, ny = y + fy * sp;
+        glife[i] -= dtf;
+        if (glife[i] <= 0 || nx < -4 || ny < -4 || nx > W + 4 || ny > H + 4) { seedGrain(i); continue; }
+        gx[i] = nx; gy[i] = ny;
+        // 生まれてすぐと消える前は小さく、ときどき瞬く
+        const lifeF = Math.min(1, glife[i] / 40, (gmax[i] - glife[i]) / 40);
+        const tw = 0.55 + 0.45 * Math.sin(tSec * gtw[i] + gph[i]);
+        const r = gsz[i] * lifeF * (0.7 + 0.3 * tw);
+        if (r < 0.15) continue;
+        const p = paths[tw > 0.8 ? 2 : tw > 0.45 ? 1 : 0];
+        p.moveTo(nx + r, ny); p.arc(nx, ny, r, 0, Math.PI * 2);
+      }
+      // 色：線の色が書かれていればその色を明るく、なければ背景に合わせた白か墨色
+      const base = cb ? [c[0], c[1], clamp(c[2] + (dk > 0.5 ? 22 : -10), 8, 96)] : [0, 0, dk > 0.5 ? 94 : 18];
+      for (let g = 0; g < 3; g++) {
+        ctx.fillStyle = `hsla(${base[0].toFixed(1)},${base[1].toFixed(0)}%,${clamp(base[2] + (g - 1) * 5, 4, 98).toFixed(0)}%,${((0.45 + g * 0.22) * layer.grain).toFixed(3)})`;
+        ctx.fill(paths[g]);
+      }
     }
   }
 
@@ -857,6 +910,10 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     N = Math.round(clamp((W * H) / 520, 400, 1900) * (reduce ? 0.6 : 1) * (view.lite ? 0.7 : 1));
     px = new Float32Array(N); py = new Float32Array(N); life = new Float32Array(N); spd = new Float32Array(N);
     for (let i = 0; i < N; i++) seed(i);
+    G = Math.round(clamp((W * H) / 900, 150, 1000) * (reduce ? 0.6 : 1) * (view.lite ? 0.7 : 1));
+    gx = new Float32Array(G); gy = new Float32Array(G); glife = new Float32Array(G); gmax = new Float32Array(G);
+    gsp = new Float32Array(G); gsz = new Float32Array(G); gtw = new Float32Array(G); gph = new Float32Array(G);
+    for (let i = 0; i < G; i++) { seedGrain(i); glife[i] = Math.random() * gmax[i]; }
     paintSky(bgNow(), 1);
     for (let i = 0; i < 90; i++) step(1);
   }
@@ -893,6 +950,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     layer.sky += (lt.sky - layer.sky) * le;
     layer.flow += (lt.flow - layer.flow) * le;
     layer.orb += (lt.orb - layer.orb) * le;
+    layer.grain += (lt.grain - layer.grain) * le;
     if (N > 0) step(dtf);
     requestAnimationFrame(frame);
   }
