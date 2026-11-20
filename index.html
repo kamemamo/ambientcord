@@ -65,7 +65,7 @@ body.show .show-hint.on { opacity: 1; }
 .ed { position: relative; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); }
 .ed:focus-within { border-color: var(--accent); }
 .ed pre, .ed textarea {
-  margin: 0; padding: 14px 14px 14px 3em; font-family: var(--f-mono); font-size: 15px; line-height: 1.9;
+  margin: 0; padding: 14px 64px 14px 3em; font-family: var(--f-mono); font-size: 15px; line-height: 1.9;
   white-space: pre-wrap; overflow-wrap: anywhere; word-break: normal; tab-size: 4; letter-spacing: 0; border: 0;
 }
 .ed pre { pointer-events: none; min-height: 12em; color: var(--fg); counter-reset: ln; }
@@ -75,6 +75,12 @@ body.show .show-hint.on { opacity: 1; }
 .ln { display: block; position: relative; counter-increment: ln; border-radius: 2px; }
 .ln::before { content: counter(ln); position: absolute; left: -2.6em; width: 2em; text-align: right; color: var(--c-com); font-size: 12px; }
 .ln.bad { background: var(--errbg); }
+/* 行ごとの値：右端のバーと数値。大きく変わった行はふわっと光る */
+.ln .lm { position: absolute; right: -56px; top: .78em; width: 46px; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; display: none; }
+.ln .lm i { display: block; height: 100%; width: calc(var(--v, 0) * 100%); background: var(--accent); }
+.ln.live .lm { display: block; }
+.ln.live.shadowed .lm i { background: var(--muted); opacity: .5; }
+.ln.live { background: color-mix(in srgb, var(--accent) calc(var(--f, 0) * 22%), transparent); transition: background-color .08s; }
 .ln.bad::before { color: var(--err); font-weight: 500; }
 .t-out { color: var(--c-out); font-weight: 500; }
 .t-in { color: var(--c-in); font-weight: 500; }
@@ -251,7 +257,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     <ol>
       <li>一行に一つ、<code>表現 ← 環境</code> と書きます。<code>&lt;-</code> や <code>は</code> でもかまいません。</li>
       <li>環境どうしは <code>と</code> でつなぐと平均になります。数値（0〜1）もそのまま書けます。</li>
-      <li>右に言葉を足すと値が変わります。<code>反転</code>・<code>× 0.5</code>・<code>+ 0.2</code>・<code>段階 4</code>・<code>ゆっくり</code>、線の色には <code>青 … 橙</code> のような色のつながり、渦には <code>近く 30</code>。</li>
+      <li>右に言葉を足すと値が変わります。<code>反転</code>・<code>× 0.5</code>・<code>+ 0.2</code>・<code>段階 4</code>・<code>ゆっくり</code>・<code>なじむ</code>、線の色には <code>青 … 橙</code> のような色のつながり、渦には <code>近く 30</code>。</li>
     </ol>
     <p>すべての値は 0 から 1 の間に揃えてから表現に渡します。<code>#</code> から後ろはメモとして読み飛ばします。</p>
     <p>何も書かなければ、何も描かれません。<code>空</code> を書くと空の色が、<code>光</code> を書くと太陽・月が、粒の言葉（粒・粒の色・粒の大きさ・粒の速さ）を一つでも書くと流れに漂う粒が、線の言葉（線の色・速さ・軌跡・向き・方角・渦・太さ・数・乱れ）を一つでも書くと流れが現れます。書かなかった言葉は既定の値で動きます。行を消すと、その部分はゆっくり消えていきます。</p>
@@ -342,7 +348,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     ["ゆらぎ", "—", "—", "—", "0〜1 を数十秒かけてゆっくり行き来する"]
   ];
   const IN_LIST = ["時刻", "気温", "音量", "低音", "中音", "高音", "音程", "照度", "風", "風向", "雨", "雲", "湿度", "気配", "ゆらぎ"];
-  const MODS = ["反転", "ゆっくり", "段階", "近く", "と", "から"];
+  const MODS = ["反転", "ゆっくり", "なじむ", "段階", "近く", "と", "から"];
   const COLORS = {
     "青": [210, 65, 50], "水色": [190, 65, 62], "藍": [228, 55, 38], "緑": [140, 45, 45], "黄": [50, 85, 55],
     "金": [42, 70, 50], "橙": [25, 85, 55], "赤": [2, 70, 50], "桃": [335, 65, 70], "紫": [275, 45, 52],
@@ -438,6 +444,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
           else if (tk.w === "段階") { const n = needNum("段階"); if (n < 2) throw new Error("段階 は 2 以上にしてください"); b.mods.push({ op: "step", n: Math.round(n) }); }
           else if (tk.w === "近く") { b.radius = clamp(needNum("近く"), 3, 100); if (out !== "swirl") b.warns.push("近く は 渦 のときだけ効きます"); }
           else if (tk.w === "と") throw new Error("「と」は環境どうしをつなぐときに使います");
+          else if (tk.w === "なじむ") { const n = peek() && peek().k === "num" ? toks[i++].v : 60; b.mods.push({ op: "fit", sec: clamp(n, 5, 600), lo: null, hi: null }); }
           else throw new Error("「から」は 青 から 橙 のように色をつなぐときに使います");
         } else if (tk.k === "op") {
           if (tk.w === "×") b.mods.push({ op: "mul", n: needNum("×") });
@@ -480,7 +487,9 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
       if (next[r.out]) errs.push({ line: idx + 1, msg: `${OUT_INFO[r.out].name} はほかの行にもあります。後の行が使われます`, warn: true });
       r.warns.forEach((w) => errs.push({ line: idx + 1, msg: w, warn: true }));
       const prev = program[r.out];
-      if (prev && prev.text === r.text) { r.mods.forEach((m, k) => { if (m.op === "slow" && prev.mods[k] && prev.mods[k].op === "slow") m.st = prev.mods[k].st; }); }
+      // 右側が同じなら、ゆっくり・なじむ が覚えている値を引き継ぐ
+      if (prev && prev.text === r.text) r.mods.forEach((m, k) => { const pm = prev.mods[k]; if (pm && pm.op === m.op) { if (m.op === "slow") m.st = pm.st; if (m.op === "fit") { m.lo = pm.lo; m.hi = pm.hi; } } });
+      r.line = idx;
       next[r.out] = r;
       states.push(r.warns.length ? "warn" : "ok");
       okCount++;
@@ -521,7 +530,26 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
   const src = $("src"), hl = $("hl");
   function paint() {
     const lines = src.value.split("\n");
-    hl.innerHTML = lines.map((l, i) => `<span class="ln${lineState[i] === "bad" ? " bad" : ""}">${hlLine(l)}</span>`).join("");
+    hl.innerHTML = lines.map((l, i) => `<span class="ln${lineState[i] === "bad" ? " bad" : ""}">${hlLine(l)}<b class="lm" aria-hidden="true"><i></i></b></span>`).join("");
+    lineEls = hl.querySelectorAll(".ln");
+    markLiveLines();
+  }
+  let lineEls = [];
+  // 動いている行（後の行に上書きされた行は薄く）に値のバーを出す
+  function markLiveLines() {
+    const used = new Set(Object.values(program).map((b) => b.line));
+    lineEls.forEach((el, i) => {
+      el.classList.toggle("live", lineState[i] === "ok" || lineState[i] === "warn");
+      el.classList.toggle("shadowed", !used.has(i));
+    });
+  }
+  function meterTick() {
+    for (const k in program) {
+      const b = program[k], el = lineEls[b.line];
+      if (!el || b.val == null) continue;
+      el.style.setProperty("--v", b.val.toFixed(3));
+      el.style.setProperty("--f", (b.flash || 0).toFixed(2));
+    }
   }
   let ct = 0;
   function onEdit() {
@@ -580,7 +608,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
   const VG = [
     ["表現（← の左）", Object.values(OUT_INFO).map((o) => [o.name, "out", o.tip])],
     ["環境（← の右）", IN_LIST.map((w) => [w, "in"])],
-    ["つなぎ・調整", [["←", "mod"], ["と", "mod"], ["反転", "mod"], ["ゆっくり", "mod"], ["×", "mod"], ["+", "mod"], ["段階", "mod"], ["近く", "mod"], ["…", "mod"]]],
+    ["つなぎ・調整", [["←", "mod"], ["と", "mod"], ["反転", "mod"], ["ゆっくり", "mod"], ["なじむ", "mod"], ["×", "mod"], ["+", "mod"], ["段階", "mod"], ["近く", "mod"], ["…", "mod"]]],
     ["色", Object.keys(COLORS).map((w) => [w, "col"])]
   ];
   const vocab = $("vocab");
@@ -770,8 +798,23 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
       else if (m.op === "add") v += m.n;
       else if (m.op === "step") { v = clamp(v, 0, 1); v = Math.round(v * (m.n - 1)) / (m.n - 1); }
       else if (m.op === "slow") { m.st = m.st == null ? v : m.st + (v - m.st) * (1 - Math.exp(-dtSec / m.sec)); v = m.st; }
+      else if (m.op === "fit") {
+        // なじむ：最近（既定 60 秒）の最小〜最大を 0〜1 に広げ直す。
+        // 端の値は「秒」くらいかけて今の値へ戻っていくので、古い極端な値はやがて忘れる。
+        if (m.lo == null) m.lo = m.hi = v;
+        const k = 1 - Math.exp(-dtSec / m.sec);
+        m.lo = Math.min(v, m.lo + (v - m.lo) * k);
+        m.hi = Math.max(v, m.hi + (v - m.hi) * k);
+        const span = Math.max(m.hi - m.lo, 0.06), mid = (m.lo + m.hi) / 2;   // 幅が小さすぎるときは、細かな雑音を広げすぎない
+        v = 0.5 + (v - mid) / span;
+      }
     }
-    return clamp(v, 0, 1);
+    v = clamp(v, 0, 1);
+    // 行ごとの値表示：大きく変わったら光らせる
+    if (b.val != null) b.flash = Math.max(b.flash * Math.exp(-dtSec / 0.6), Math.min(1, Math.abs(v - b.val) * 12));
+    else b.flash = 0;
+    b.val = v;
+    return v;
   }
   const P = {};
   OUT_ORDER.forEach((k) => (P[k] = OUT_INFO[k].def));
@@ -1033,7 +1076,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
   cv.addEventListener("pointermove", onPointer);
   cv.addEventListener("pointerdown", onPointer);
 
-  let last = performance.now();
+  let last = performance.now(), meterN = 0;
   function frame(now) {
     if (view.lite && now - last < 1000 / 30 - 2) { requestAnimationFrame(frame); return; }   // 軽くするときは 1秒 30 コマまで
     const dtf = clamp((now - last) / 16.667, 0.2, 3), dtSec = dtf / 60;
@@ -1057,6 +1100,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     layer.grain += (lt.grain - layer.grain) * le;
     layer.bleed += (lt.bleed - layer.bleed) * le;
     if (N > 0) step(dtf);
+    if ((meterN = (meterN + 1) % 2) === 0) meterTick();   // 2 フレームに 1 回
     requestAnimationFrame(frame);
   }
 
