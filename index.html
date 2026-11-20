@@ -194,6 +194,17 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
         </div>
         <p class="wx-status" id="mic-status">いまはシミュレーションの音量で動いています。音はこのページの中で大きさを測るだけで、録音も送信もしません。</p>
       </div>
+      <div class="wx">
+        <p class="label">明るさを照度につなぐ</p>
+        <div class="wx-form">
+          <button class="btn" type="button" id="lux-btn" aria-pressed="false">明るさをつなぐ</button>
+          <label class="mic-gain" for="lux-gain">感度
+            <input type="range" id="lux-gain" min="-10" max="10" step="1" value="0">
+            <span class="num" id="lux-gain-num">±0</span>
+          </label>
+        </div>
+        <p class="wx-status" id="lux-status">いまはシミュレーションの照度で動いています。照度センサーがあればそれを、なければカメラ映像の平均の明るさを使います。映像は明るさを測るだけで、表示も録画も送信もしません。</p>
+      </div>
       <details class="env" id="env">
         <summary>環境を手で動かす</summary>
         <div id="env-rows"></div>
@@ -214,9 +225,11 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     </ol>
     <p>すべての値は 0 から 1 の間に揃えてから表現に渡します。<code>#</code> から後ろはメモとして読み飛ばします。</p>
     <h2>実際の天気について</h2>
-    <p>気温・風・風向・雨・雲・湿度は、Open-Meteo の気象データにつなぐと実際の値になります（10分ごとに更新）。claude.ai の中で開いているときは外への通信が止められているので、シミュレーションの値で動きます。このHTMLファイルを自分のブラウザや Raspberry Pi の画面で開くと、そのまま実際の天気に反応します。照度は、今後センサーにつなぐ予定です。</p>
+    <p>気温・風・風向・雨・雲・湿度は、Open-Meteo の気象データにつなぐと実際の値になります（10分ごとに更新）。claude.ai の中で開いているときは外への通信が止められているので、シミュレーションの値で動きます。このHTMLファイルを自分のブラウザや Raspberry Pi の画面で開くと、そのまま実際の天気に反応します。音量はマイク、照度は照度センサーかカメラにつなげます。</p>
     <h2>マイクについて</h2>
     <p>「マイクをつなぐ」を押すと、音量 がその場の実際の音の大きさになります。測るのは大きさだけで、録音も送信もしません。静かな部屋で 35 dB 前後、話し声で 60 dB 前後になるよう合わせてあり、場所によって合わないときは 感度 で上下させます。ブラウザの決まりで、https か localhost、または自分のパソコンのファイルとして開いたときに使えます。</p>
+    <h2>明るさについて</h2>
+    <p>「明るさをつなぐ」を押すと、照度 がその場の実際の明るさになります。照度センサーを使えるブラウザ（一部の Android の Chrome など）ではセンサーの lx を、使えないときはカメラ映像の平均の明るさを使います。映像は 32×24 の小さな大きさで明るさを測るだけで、画面に出すことも、録画や送信もしません。カメラは自動で明るさを補正するため、明暗の差は実際より小さく出ます。物足りないときは 感度 を上げてください。</p>
     <p>風向は「風が吹いてくる方角」で、北が 0、東が 0.25、南が 0.5、西が 0.75 です。<code>方角 ← 風向</code> と書くと、線は風下へ流れます。</p>
   </section>
 </div>
@@ -587,6 +600,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     KEYS.forEach((k) => {
       if (S[k].mode !== "manual") return;
       if (k === "sound" && mic.on) { S[k].mode = "mic"; }
+      else if (k === "lux" && light.on) { S[k].mode = "light"; if (light.lux != null) S[k].target = light.lux; }
       else if (weather.connected && WEATHER_KEYS.includes(k)) { S[k].mode = "weather"; S[k].target = weather.values[k]; }
       else { S[k].mode = "auto"; newTarget(k); }
     });
@@ -775,7 +789,8 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     const ease = 1 - Math.pow(0.994, dtf);
     if (mic.on) micTick(dtf);
     const fast = 1 - Math.pow(0.82, dtf);   // マイクは息や拍手にすぐ応えるように
-    KEYS.forEach((k) => { const s = S[k]; if (s.mode !== "manual") s.value += (s.target - s.value) * (s.mode === "mic" ? fast : ease); });
+    const lightEase = 1 - Math.pow(0.96, dtf);   // 明かりを点けた・消したが1秒ほどで伝わるように
+    KEYS.forEach((k) => { const s = S[k]; if (s.mode !== "manual") s.value += (s.target - s.value) * (s.mode === "mic" ? fast : s.mode === "light" ? lightEase : ease); });
     if (now - presence.last > 500) presence.p = Math.max(0, presence.p - 0.006 * dtf);
     ENV = envValues(tSec);
     OUT_ORDER.forEach((k) => {
@@ -806,7 +821,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
       const s = S[k];
       $("num-" + k).textContent = s.value.toFixed(s.dec);
       if (s.mode === "auto") $("in-" + k).value = s.value.toFixed(s.dec);
-      setChip($("chip-" + k), s.mode === "auto" ? "sim" : (s.mode === "weather" || s.mode === "mic") ? "real" : "manual", s.mode === "auto" ? "シミュ" : s.mode === "weather" ? "実測" : s.mode === "mic" ? "マイク" : "手動");
+      setChip($("chip-" + k), s.mode === "auto" ? "sim" : (s.mode === "weather" || s.mode === "mic" || s.mode === "light") ? "real" : "manual", s.mode === "auto" ? "シミュ" : s.mode === "weather" ? "実測" : s.mode === "mic" ? "マイク" : s.mode === "light" ? (light.kind === "sensor" ? "センサー" : "カメラ") : "手動");
     });
     const here = presence.p > 0.15;
     $("num-presence").textContent = here ? "あり" : "なし";
@@ -946,6 +961,117 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     // 前回つないでいて、すでに許可がある場合だけ自動でつなぐ（許可ダイアログを勝手に出さない）
     if (localStorage.getItem("soyogi-mic") && navigator.permissions) {
       navigator.permissions.query({ name: "microphone" }).then((p) => { if (p.state === "granted") startMic(); }).catch(() => {});
+    }
+  } catch (e) {}
+
+  /* ================= Light (Ambient Light Sensor / camera) ================= */
+  // 照度センサー（AmbientLightSensor）が使えればその lx をそのまま使う。
+  // 使えなければカメラ映像の平均輝度 Y（0〜1）を 10^(3Y) − 1 で lx に置き換える。
+  // こうすると 照度 の 0〜1 の値（log10(lx+1)/3）がほぼ Y と同じになる。
+  // カメラは自動露出で明るさを補正するので、実際の差より小さく出る。感度で補う。
+  const light = { on: false, kind: null, sensor: null, stream: null, video: null, timer: 0, cv: null, cx: null, gain: 0, lux: null };
+  function setL(text, kind) { const el = $("lux-status"); el.textContent = text; el.className = "wx-status" + (kind ? " " + kind : ""); }
+  function lightUI() {
+    const b = $("lux-btn");
+    b.textContent = light.on ? "明るさを止める" : "明るさをつなぐ";
+    b.setAttribute("aria-pressed", light.on ? "true" : "false");
+  }
+  function feedLux(lx) {
+    light.lux = clamp(lx, S.lux.min, S.lux.max);
+    if (S.lux.mode === "light") S.lux.target = light.lux;
+  }
+  function begin(kind) {
+    light.on = true; light.kind = kind;
+    if (S.lux.mode !== "manual") S.lux.mode = "light";
+    try { localStorage.setItem("soyogi-light", kind); } catch (e) {}
+    setL(kind === "sensor"
+      ? "照度センサーにつながっています。照度 はこの場所の実際の明るさ（lx）で動きます。"
+      : "カメラの明るさにつながっています。照度 はこの場所の明るさで動きます（カメラの自動補正で、差は実際より小さめに出ます）。", "ok");
+    lightUI();
+  }
+  function trySensor() {
+    if (!("AmbientLightSensor" in window)) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (ok) => { if (!done) { done = true; resolve(ok); } };
+      try {
+        const s = new AmbientLightSensor({ frequency: 2 });
+        s.addEventListener("reading", () => {
+          if (!done) { light.sensor = s; begin("sensor"); finish(true); }
+          if (light.sensor === s) feedLux(s.illuminance * Math.pow(10, light.gain / 10));
+        });
+        s.addEventListener("error", () => { s.stop(); finish(false); });
+        s.start();
+        setTimeout(() => { if (!done) { s.stop(); finish(false); } }, 3000);
+      } catch (e) { finish(false); }
+    });
+  }
+  async function tryCamera() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      setL("この環境ではカメラも照度センサーも使えません。https か localhost で開いてください。", "err");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 160 }, height: { ideal: 120 }, frameRate: { ideal: 5 } }, audio: false });
+      // 露出を固定できるカメラなら固定して、自動補正で明暗が打ち消されないようにする
+      const track = stream.getVideoTracks()[0];
+      try {
+        const caps = track.getCapabilities ? track.getCapabilities() : {};
+        if (caps.exposureMode && caps.exposureMode.includes("manual")) await track.applyConstraints({ advanced: [{ exposureMode: "manual" }] });
+      } catch (e) {}
+      const video = document.createElement("video");
+      video.muted = true; video.playsInline = true; video.srcObject = stream;
+      await video.play();
+      const cv2 = document.createElement("canvas"); cv2.width = 32; cv2.height = 24;
+      Object.assign(light, { stream, video, cv: cv2, cx: cv2.getContext("2d", { willReadFrequently: true }) });
+      const sample = () => {
+        if (!light.video || light.video.readyState < 2) return;
+        light.cx.drawImage(light.video, 0, 0, 32, 24);
+        const d = light.cx.getImageData(0, 0, 32, 24).data;
+        let sum = 0;
+        for (let i = 0; i < d.length; i += 4) sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+        const y = sum / (d.length / 4) / 255;
+        feedLux((Math.pow(10, 3 * y) - 1) * Math.pow(10, light.gain / 10));
+      };
+      sample();
+      light.timer = setInterval(sample, 500);
+      begin("camera");
+    } catch (e) {
+      const denied = e && (e.name === "NotAllowedError" || e.name === "SecurityError");
+      setL(denied
+        ? "カメラを使えませんでした（許可されていないか、claude.ai の中で開いています）。HTMLファイルを自分のブラウザで開くと使えます。"
+        : "カメラが見つかりませんでした。つながっているか確かめてください。", "err");
+      lightUI();
+    }
+  }
+  async function startLight() {
+    setL("明るさを測る準備をしています…");
+    if (await trySensor()) return;
+    await tryCamera();
+  }
+  function stopLight() {
+    if (light.sensor) light.sensor.stop();
+    if (light.stream) light.stream.getTracks().forEach((t) => t.stop());
+    clearInterval(light.timer);
+    Object.assign(light, { on: false, kind: null, sensor: null, stream: null, video: null, timer: 0, lux: null });
+    if (S.lux.mode === "light") { S.lux.mode = "auto"; newTarget("lux"); }
+    try { localStorage.removeItem("soyogi-light"); } catch (e) {}
+    setL("明るさを止めました。シミュレーションの照度に戻っています。");
+    lightUI();
+  }
+  $("lux-btn").addEventListener("click", () => (light.on ? stopLight() : startLight()));
+  $("lux-gain").addEventListener("input", (e) => {
+    light.gain = parseFloat(e.target.value);
+    $("lux-gain-num").textContent = (light.gain > 0 ? "+" : light.gain < 0 ? "−" : "±") + Math.abs(light.gain);
+    try { localStorage.setItem("soyogi-light-gain", String(light.gain)); } catch (e2) {}
+  });
+  try {
+    const g = localStorage.getItem("soyogi-light-gain");
+    if (g) { $("lux-gain").value = g; $("lux-gain").dispatchEvent(new Event("input")); }
+    // 前回カメラでつないでいて、すでに許可がある場合だけ自動でつなぐ
+    const prev = localStorage.getItem("soyogi-light");
+    if (prev && navigator.permissions) {
+      navigator.permissions.query({ name: "camera" }).then((p) => { if (p.state === "granted") startLight(); }).catch(() => {});
     }
   } catch (e) {}
 
