@@ -44,6 +44,20 @@ h1 small { display: block; font-size: .42em; letter-spacing: .1em; color: var(--
 
 .stage { position: relative; width: 100%; aspect-ratio: 4 / 3; border-radius: 3px; overflow: hidden; background: var(--surface); }
 #cv { display: block; width: 100%; height: 100%; touch-action: pan-y; cursor: crosshair; }
+
+/* 展示モード：絵だけを画面いっぱいに */
+.chk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.chk input { margin: 0; accent-color: var(--accent); }
+.show-cap, .show-hint { display: none; position: absolute; margin: 0; pointer-events: none; }
+body.show { overflow: hidden; background: #000; }
+body.show .stage { position: fixed; inset: 0; z-index: 10; width: auto; aspect-ratio: auto; border-radius: 0; background: #000; }
+body.show #cv { touch-action: none; }
+body.show.idle, body.show.idle #cv { cursor: none; }
+body.show.cap .show-cap { display: block; left: max(24px, 2.5vw); bottom: max(20px, 2.5vh); font-family: var(--f-display); font-weight: 500;
+  font-size: clamp(14px, 1.6vw, 26px); letter-spacing: .12em; color: rgba(255,255,255,.82); text-shadow: 0 1px 8px rgba(0,0,0,.55); }
+body.show .show-hint { display: block; top: 16px; right: 16px; padding: 6px 12px; border-radius: 999px; font-size: 13px;
+  color: #fff; background: rgba(0,0,0,.45); opacity: 0; transition: opacity .6s; }
+body.show .show-hint.on { opacity: 1; }
 .cap-label, .label { font-family: var(--f-mono); font-size: 11px; letter-spacing: .08em; color: var(--muted); margin: 0; }
 .cap-text { margin: 0; font-family: var(--f-display); font-size: 17px; font-weight: 500; letter-spacing: .08em; }
 
@@ -144,9 +158,16 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
 
   <div class="main">
     <section class="a-stage" aria-label="作品">
-      <div class="stage" id="stage"><canvas id="cv" role="img" aria-label="そよぎで書いた関係に従って変化する流れの絵"></canvas></div>
+      <div class="stage" id="stage"><canvas id="cv" role="img" aria-label="そよぎで書いた関係に従って変化する流れの絵"></canvas><p class="show-cap" id="show-cap" aria-hidden="true"></p><p class="show-hint" id="show-hint" role="status">Esc・ダブルクリックで戻ります</p></div>
       <p class="cap-label">いまの環境</p>
       <p class="cap-text" id="cap-text">読み込み中</p>
+      <div class="btns show-ctl">
+        <button class="btn" type="button" id="btn-show">展示モード</button>
+        <button class="btn" type="button" id="btn-link">展示用リンクをコピー</button>
+        <label class="chk"><input type="checkbox" id="opt-cap"> 環境の一言を出す</label>
+        <label class="chk"><input type="checkbox" id="opt-lite"> 軽くする（ラズパイ向け）</label>
+      </div>
+      <p class="wx-status" id="link-status" hidden></p>
     </section>
 
     <section class="a-code" aria-label="コード">
@@ -230,6 +251,9 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     <p>「マイクをつなぐ」を押すと、音量 がその場の実際の音の大きさになります。測るのは大きさだけで、録音も送信もしません。静かな部屋で 35 dB 前後、話し声で 60 dB 前後になるよう合わせてあり、場所によって合わないときは 感度 で上下させます。ブラウザの決まりで、https か localhost、または自分のパソコンのファイルとして開いたときに使えます。</p>
     <h2>明るさについて</h2>
     <p>「明るさをつなぐ」を押すと、照度 がその場の実際の明るさになります。照度センサーを使えるブラウザ（一部の Android の Chrome など）ではセンサーの lx を、使えないときはカメラ映像の平均の明るさを使います。映像は 32×24 の小さな大きさで明るさを測るだけで、画面に出すことも、録画や送信もしません。カメラは自動で明るさを補正するため、明暗の差は実際より小さく出ます。物足りないときは 感度 を上げてください。</p>
+    <h2>展示モード</h2>
+    <p>「展示モード」を押すと、絵だけが画面いっぱいに出ます。Esc かダブルクリックで戻ります。マウスを動かさなければカーソルは消えます。「環境の一言を出す」で、片隅にいまの環境の言葉を出せます。「軽くする」は、ラズパイのような小さなコンピュータ向けに、解像度と線の数を少し下げ、1秒 30 コマで描きます。</p>
+    <p>「展示用リンクをコピー」で、いまのコード・天気の場所・マイク・明るさ・表示の設定が入ったリンクができます。このリンクを開くと、すぐ展示モードで始まります。ラズパイでは、このリンクをブラウザのキオスクモードで開くと、電源を入れるだけで展示が始まります。</p>
     <p>風向は「風が吹いてくる方角」で、北が 0、東が 0.25、南が 0.5、西が 0.75 です。<code>方角 ← 風向</code> と書くと、線は風下へ流れます。</p>
   </section>
 </div>
@@ -242,6 +266,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
   const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const randn = () => { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
   const esc = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const view = { show: false, cap: false, lite: false, fs: false };   // 展示モードの状態
 
   /* ================= Language: vocabulary ================= */
   const OUT = { "空の色": "sky", "空": "sky", "線の色": "color", "色": "color", "速さ": "speed", "軌跡": "trail", "向き": "drift", "方角": "heading", "渦": "swirl", "太さ": "width", "数": "count", "乱れ": "turb" };
@@ -761,10 +786,11 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     const r = stage.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) return;
     W = r.width; H = r.height;
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    // 軽くするときは内部の解像度を下げて描き、画面に合わせて引き伸ばす（ラズパイ向け）
+    const dpr = view.lite ? 0.75 : Math.min(2, window.devicePixelRatio || 1);
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    N = Math.round(clamp((W * H) / 520, 400, 1900) * (reduce ? 0.6 : 1));
+    N = Math.round(clamp((W * H) / 520, 400, 1900) * (reduce ? 0.6 : 1) * (view.lite ? 0.7 : 1));
     px = new Float32Array(N); py = new Float32Array(N); life = new Float32Array(N);
     for (let i = 0; i < N; i++) seed(i);
     paintSky(sky(P.sky * 24), 1);
@@ -784,6 +810,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
 
   let last = performance.now();
   function frame(now) {
+    if (view.lite && now - last < 1000 / 30 - 2) { requestAnimationFrame(frame); return; }   // 軽くするときは 1秒 30 コマまで
     const dtf = clamp((now - last) / 16.667, 0.2, 3), dtSec = dtf / 60;
     last = now; tSec += dtSec;
     const ease = 1 - Math.pow(0.994, dtf);
@@ -832,6 +859,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     if (S.rain.value > 0.2) parts.push("雨");
     if (here) parts.push("誰かがいる");
     $("cap-text").textContent = parts.join("・");
+    if (view.show && view.cap) $("show-cap").textContent = parts.join("・");
     OUT_ORDER.forEach((k) => { const v = vrows[k]; v.bar.style.width = (P[k] * 100).toFixed(1) + "%"; v.num.textContent = P[k].toFixed(2); });
   }
 
@@ -908,6 +936,11 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     b.setAttribute("aria-pressed", mic.on ? "true" : "false");
   }
   async function startMic() {
+    if (mic.on || mic.busy) return;
+    mic.busy = true;
+    try { await startMicInner(); } finally { mic.busy = false; }
+  }
+  async function startMicInner() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { setM("この環境ではマイクを使えません。https か localhost で開いてください。", "err"); return; }
     setM("マイクの許可を待っています…");
     try {
@@ -1045,6 +1078,11 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     }
   }
   async function startLight() {
+    if (light.on || light.busy) return;
+    light.busy = true;
+    try { await startLightInner(); } finally { light.busy = false; }
+  }
+  async function startLightInner() {
     setL("明るさを測る準備をしています…");
     if (await trySensor()) return;
     await tryCamera();
@@ -1075,15 +1113,110 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     }
   } catch (e) {}
 
+  /* ================= Display mode（展示モード） ================= */
+  // リンクの # の後ろに設定を入れる：
+  //   #show&code=<コード>&place=札幌&mic=1&light=1&micgain=0&luxgain=0&cap=1&lite=1
+  // code は UTF-8 を base64url にしたもの。place=here で現在地。
+  const PAGES_URL = "https://kamemamo.github.io/ambientcord/";
+  const b64enc = (s) => { let b = ""; new TextEncoder().encode(s).forEach((x) => (b += String.fromCharCode(x))); return btoa(b).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
+  const b64dec = (s) => { const b = atob(s.replace(/-/g, "+").replace(/_/g, "/")); return new TextDecoder().decode(Uint8Array.from(b, (c) => c.charCodeAt(0))); };
+  const store = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} };
+  const load = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+
+  function setOpt(name, on, save) {
+    view[name] = on;
+    $("opt-" + name).checked = on;
+    if (name === "cap") document.body.classList.toggle("cap", on);
+    if (name === "lite") resize();
+    if (save) store("soyogi-opt-" + name, on ? "1" : null);
+  }
+  $("opt-cap").addEventListener("change", (e) => setOpt("cap", e.target.checked, true));
+  $("opt-lite").addEventListener("change", (e) => setOpt("lite", e.target.checked, true));
+
+  let idleT = 0, hintT = 0;
+  function wake() {
+    document.body.classList.remove("idle");
+    clearTimeout(idleT);
+    if (view.show) idleT = setTimeout(() => document.body.classList.add("idle"), 2500);   // 動かさなければカーソルを消す
+  }
+  function enterShow(full) {
+    view.show = true;
+    document.body.classList.add("show");
+    uiTick();
+    const h = $("show-hint");
+    h.classList.add("on"); clearTimeout(hintT); hintT = setTimeout(() => h.classList.remove("on"), 3000);
+    wake();
+    if (full && document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().then(() => (view.fs = true)).catch(() => {});
+    }
+  }
+  function leaveShow() {
+    if (!view.show) return;
+    view.show = false; view.fs = false;
+    document.body.classList.remove("show", "idle");
+    clearTimeout(idleT);
+    if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    if (/^#show/.test(location.hash)) { try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {} }
+  }
+  $("btn-show").addEventListener("click", () => enterShow(true));
+  cv.addEventListener("dblclick", () => { if (view.show) leaveShow(); });
+  document.addEventListener("keydown", (e) => { if (view.show && (e.key === "Escape" || e.key === "e")) leaveShow(); });
+  // 全画面を Esc で抜けたときは、ブラウザが Esc を先に使うので、ここで一緒に戻す
+  document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && view.fs) leaveShow(); });
+  document.addEventListener("pointermove", () => { if (view.show) wake(); });
+
+  function showLink() {
+    const base = /^https?:$/.test(location.protocol) && !/claude/.test(location.hostname) ? location.origin + location.pathname : PAGES_URL;
+    const q = ["show", "code=" + b64enc(src.value)];
+    const place = load("soyogi-place");
+    if (weather.connected && place) q.push("place=" + (place === "@here" ? "here" : encodeURIComponent(place)));
+    if (mic.on) q.push("mic=1", "micgain=" + mic.gain);
+    if (light.on) q.push("light=1", "luxgain=" + light.gain);
+    if (view.cap) q.push("cap=1");
+    if (view.lite) q.push("lite=1");
+    return base + "#" + q.join("&");
+  }
+  $("btn-link").addEventListener("click", async (e) => {
+    const b = e.currentTarget, url = showLink(), st = $("link-status");
+    try { await navigator.clipboard.writeText(url); b.textContent = "コピーしました"; }
+    catch (err) { window.prompt("このリンクをコピーしてください", url); }
+    st.hidden = false; st.className = "wx-status";
+    st.textContent = "いまのコード" + (url.includes("place=") ? "・天気の場所" : "") + (url.includes("mic=1") ? "・マイク" : "") + (url.includes("light=1") ? "・明るさ" : "") + "の設定が入った、展示モードで開くリンクです。ラズパイのブラウザで開くと、そのまま展示が始まります。";
+    setTimeout(() => (b.textContent = "展示用リンクをコピー"), 1600);
+  });
+
+  // 保存してある表示の設定
+  setOpt("cap", load("soyogi-opt-cap") === "1", false);
+  view.lite = load("soyogi-opt-lite") === "1"; $("opt-lite").checked = view.lite;
+
+  // リンクの設定を読む（リンクのコードは下書きとして保存しないので、編集画面の下書きを上書きしない）
+  const HP = new URLSearchParams(location.hash.replace(/^#/, ""));
+  let linkCode = null;
+  if (HP.has("show")) {
+    try { if (HP.get("code")) linkCode = b64dec(HP.get("code")); } catch (e) {}
+    if (HP.has("cap")) setOpt("cap", HP.get("cap") === "1", false);
+    if (HP.has("lite")) { view.lite = HP.get("lite") === "1"; $("opt-lite").checked = view.lite; }
+    const num = (k) => { const v = parseFloat(HP.get(k)); return isFinite(v) ? String(v) : null; };
+    if (num("micgain") != null) { $("mic-gain").value = num("micgain"); $("mic-gain").dispatchEvent(new Event("input")); }
+    if (num("luxgain") != null) { $("lux-gain").value = num("luxgain"); $("lux-gain").dispatchEvent(new Event("input")); }
+    const place = HP.get("place");
+    if (place === "here") connectHere();
+    else if (place) { $("wx-city").value = place; connectByCity(place); }
+    if (HP.get("mic") === "1") startMic();
+    if (HP.get("light") === "1") startLight();
+  }
+
   /* ================= Start ================= */
   let initial = PRESETS.window;
   try { const d = localStorage.getItem("soyogi-draft"); if (d && d.trim()) initial = d; } catch (e) {}
+  if (linkCode && linkCode.trim()) initial = linkCode;
   src.value = initial;
   compile(initial);
   paint();
   resize();
   uiTick();
   setInterval(uiTick, 250);
+  if (HP.has("show")) enterShow(false);   // リンクから開いたときは全画面にできない（ブラウザの決まり）ので、キオスクモードで全画面にする
   requestAnimationFrame(frame);
 })();
 </script>
