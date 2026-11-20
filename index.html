@@ -262,7 +262,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     <h2>実際の天気について</h2>
     <p>気温・風・風向・雨・雲・湿度は、Open-Meteo の気象データにつなぐと実際の値になります（10分ごとに更新）。claude.ai の中で開いているときは外への通信が止められているので、シミュレーションの値で動きます。このHTMLファイルを自分のブラウザや Raspberry Pi の画面で開くと、そのまま実際の天気に反応します。音量はマイク、照度は照度センサーかカメラにつなげます。</p>
     <h2>マイクについて</h2>
-    <p>「マイクをつなぐ」を押すと、音量 がその場の実際の音の大きさになります。測るのは大きさだけで、録音も送信もしません。静かな部屋で 35 dB 前後、話し声で 60 dB 前後になるよう合わせてあり、場所によって合わないときは 感度 で上下させます。ブラウザの決まりで、https か localhost、または自分のパソコンのファイルとして開いたときに使えます。</p>
+    <p>「マイクをつなぐ」を押すと、音量 がその場の実際の音の大きさになります。測るのは大きさだけで、録音も送信もしません。静かな部屋で 35 dB 前後、話し声で 60 dB 前後になるよう合わせてあり、場所によって合わないときは 感度 で上下させます。音を周波数に分けて、<code>低音</code>（20〜250 Hz）・<code>中音</code>（250〜2000 Hz）・<code>高音</code>（2000〜8000 Hz）の強さと、いちばんはっきり鳴っている音の高さ <code>音程</code> も取ります。ノートパソコンの内蔵マイクは低音をあまり拾わないので、低音を使うなら USB マイクがおすすめです。ブラウザの決まりで、https か localhost、または自分のパソコンのファイルとして開いたときに使えます。</p>
     <h2>明るさについて</h2>
     <p>「明るさをつなぐ」を押すと、照度 がその場の実際の明るさになります。照度センサーを使えるブラウザ（一部の Android の Chrome など）ではセンサーの lx を、使えないときはカメラ映像の平均の明るさを使います。映像は 32×24 の小さな大きさで明るさを測るだけで、画面に出すことも、録画や送信もしません。カメラは自動で明るさを補正するため、明暗の差は実際より小さく出ます。物足りないときは 感度 を上げてください。</p>
     <h2>展示モード</h2>
@@ -303,7 +303,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     turb:  { name: "乱れ",   def: 0.3,  tip: "流れの細かさ" }
   };
   const OUT_ORDER = Object.keys(OUT_INFO);
-  const IN = { "時刻": "time", "時間": "time", "気温": "temp", "温度": "temp", "音量": "sound", "音": "sound", "照度": "lux", "明るさ": "lux", "風": "wind", "風速": "wind", "風向": "winddir", "雨": "rain", "雲": "cloud", "湿度": "humid", "気配": "presence", "人": "presence", "ゆらぎ": "yuragi" };
+  const IN = { "時刻": "time", "時間": "time", "気温": "temp", "温度": "temp", "音量": "sound", "音": "sound", "低音": "bass", "中音": "midr", "高音": "treble", "音程": "pitch", "照度": "lux", "明るさ": "lux", "風": "wind", "風速": "wind", "風向": "winddir", "雨": "rain", "雲": "cloud", "湿度": "humid", "気配": "presence", "人": "presence", "ゆらぎ": "yuragi" };
   // 早見表：値が 0・0.5・1 のときの見え方
   const OUT_TABLE = {
     sky:   ["深夜", "正午", "深夜（0 と同じ）", "0.25 朝6時、0.75 夕方6時"],
@@ -334,10 +334,14 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     ["雨", "0 mm/h", "約 3.6 mm/h", "20 mm/h 以上", "対数で換算。小雨 ≒ 1 mm/h（0.23）"],
     ["雲", "0 %", "50 %", "100 %", ""],
     ["湿度", "0 %", "50 %", "100 %", ""],
+    ["低音", "30 dB 以下", "60 dB", "90 dB 以上", "20〜250 Hz の強さ。足音・エアコン・音楽のベース"],
+    ["中音", "30 dB 以下", "60 dB", "90 dB 以上", "250〜2000 Hz の強さ。話し声・多くの楽器"],
+    ["高音", "30 dB 以下", "60 dB", "90 dB 以上", "2000〜8000 Hz の強さ。拍手・鳥の声・食器の音"],
+    ["音程", "80 Hz（低い声）", "約 400 Hz", "2000 Hz（口笛）", "対数で換算。1 オクターブ ≒ 0.215。はっきりした高さがないときは前の値のまま"],
     ["気配", "だれもいない", "ときどき動く", "すぐそばで動き続けている", "ポインタが動くと上がり、止まると下がる"],
     ["ゆらぎ", "—", "—", "—", "0〜1 を数十秒かけてゆっくり行き来する"]
   ];
-  const IN_LIST = ["時刻", "気温", "音量", "照度", "風", "風向", "雨", "雲", "湿度", "気配", "ゆらぎ"];
+  const IN_LIST = ["時刻", "気温", "音量", "低音", "中音", "高音", "音程", "照度", "風", "風向", "雨", "雲", "湿度", "気配", "ゆらぎ"];
   const MODS = ["反転", "ゆっくり", "段階", "近く", "と", "から"];
   const COLORS = {
     "青": [210, 65, 50], "水色": [190, 65, 62], "藍": [228, 55, 38], "緑": [140, 45, 45], "黄": [50, 85, 55],
@@ -652,6 +656,10 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
   const S = {
     temp:  { label: "気温", unit: "°C", min: -5, max: 35, step: 0.1, spread: 1.6, dec: 1 },
     sound: { label: "音量", unit: "dB", min: 30, max: 90, step: 1, spread: 5, dec: 0 },
+    bass:  { label: "低音", unit: "dB", min: 30, max: 90, step: 1, spread: 5, dec: 0 },
+    midr:  { label: "中音", unit: "dB", min: 30, max: 90, step: 1, spread: 5, dec: 0 },
+    treble: { label: "高音", unit: "dB", min: 30, max: 90, step: 1, spread: 5, dec: 0 },
+    pitch: { label: "音程", unit: "Hz", min: 80, max: 2000, step: 1, spread: 0, dec: 0 },
     lux:   { label: "照度", unit: "lx", min: 0, max: 1000, step: 1, spread: 0, dec: 0 },
     wind:  { label: "風",   unit: "m/s", min: 0, max: 10, step: 0.1, spread: 1.5, dec: 1 },
     winddir: { label: "風向", unit: "°", min: 0, max: 360, step: 1, spread: 25, dec: 0 },
@@ -661,10 +669,14 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
   };
   const WEATHER_KEYS = ["temp", "wind", "winddir", "rain", "cloud", "humid"];
   const KEYS = Object.keys(S);
+  const MIC_KEYS = ["sound", "bass", "midr", "treble", "pitch"];   // マイクから取るもの
   function baseline(key, h) {
     switch (key) {
       case "temp": return 15 + 7 * Math.sin(2 * Math.PI * (h - 9) / 24);
       case "sound": return (h > 7 && h < 22) ? 48 : 36;
+      case "bass": return (h > 7 && h < 22) ? 40 : 33;
+      case "midr": return (h > 7 && h < 22) ? 45 : 34;
+      case "treble": return (h > 7 && h < 22) ? 36 : 31;
       case "lux": if (h >= 7 && h < 17) return 520; if ((h >= 5.5 && h < 7) || (h >= 17 && h < 19)) return 160; return 45;
       case "winddir": return 270;
       case "cloud": return 40;
@@ -678,6 +690,8 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     let v;
     if (key === "lux") v = baseline("lux", h) * Math.exp(randn() * 0.35);
     else if (key === "sound" && Math.random() < 0.12) v = 62 + Math.random() * 16;
+    else if ((key === "midr" || key === "treble") && Math.random() < 0.1) v = 55 + Math.random() * 18;
+    else if (key === "pitch") v = 220 * Math.exp(randn() * 0.55);   // 声や物音くらいの高さを、ときどき跳ばす
     else if (key === "rain") v = Math.random() < 0.08 ? 0.5 + Math.random() * 3 : 0;
     else v = baseline(key, h) + randn() * s.spread;
     s.target = clamp(v, s.min, s.max);
@@ -701,7 +715,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
   $("btn-auto").addEventListener("click", () => {
     KEYS.forEach((k) => {
       if (S[k].mode !== "manual") return;
-      if (k === "sound" && mic.on) { S[k].mode = "mic"; }
+      if (MIC_KEYS.includes(k) && mic.on) { S[k].mode = "mic"; }
       else if (k === "lux" && light.on) { S[k].mode = "light"; if (light.lux != null) S[k].target = light.lux; }
       else if (weather.connected && WEATHER_KEYS.includes(k)) { S[k].mode = "weather"; S[k].target = weather.values[k]; }
       else { S[k].mode = "auto"; newTarget(k); }
@@ -732,6 +746,10 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
       time: (((hourNow() % 24) + 24) % 24) / 24,
       temp: clamp((S.temp.value + 5) / 40, 0, 1),
       sound: clamp((S.sound.value - 30) / 60, 0, 1),
+      bass: clamp((S.bass.value - 30) / 60, 0, 1),
+      midr: clamp((S.midr.value - 30) / 60, 0, 1),
+      treble: clamp((S.treble.value - 30) / 60, 0, 1),
+      pitch: clamp(Math.log(S.pitch.value / 80) / Math.log(2000 / 80), 0, 1),   // 80 Hz〜2000 Hz を対数で
       lux: clamp(Math.log10(S.lux.value + 1) / 3, 0, 1),
       wind: clamp(S.wind.value / 10, 0, 1),
       winddir: clamp(S.winddir.value / 360, 0, 1),
@@ -1164,10 +1182,11 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
       an.fftSize = 2048;
       an.smoothingTimeConstant = 0;
       ac.createMediaStreamSource(stream).connect(an);
-      Object.assign(mic, { on: true, ac, an, stream, buf: new Float32Array(an.fftSize), peak: 0 });
-      if (S.sound.mode !== "manual") S.sound.mode = "mic";
+      Object.assign(mic, { on: true, ac, an, stream, buf: new Float32Array(an.fftSize), fbuf: new Float32Array(an.frequencyBinCount),
+        rate: ac.sampleRate, peak: 0, bands: [0, 0, 0], tick: 0 });
+      MIC_KEYS.forEach((k) => { if (S[k].mode !== "manual") S[k].mode = "mic"; });
       try { localStorage.setItem("soyogi-mic", "1"); } catch (e) {}
-      setM("マイクにつながっています。音量 はこの場所の実際の音で動きます。", "ok");
+      setM("マイクにつながっています。音量・低音・中音・高音・音程 はこの場所の実際の音で動きます。", "ok");
     } catch (e) {
       const denied = e && (e.name === "NotAllowedError" || e.name === "SecurityError");
       setM(denied
@@ -1180,7 +1199,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     if (mic.stream) mic.stream.getTracks().forEach((t) => t.stop());
     if (mic.ac) mic.ac.close().catch(() => {});
     Object.assign(mic, { on: false, ac: null, an: null, stream: null });
-    if (S.sound.mode === "mic") { S.sound.mode = "auto"; newTarget("sound"); }
+    MIC_KEYS.forEach((k) => { if (S[k].mode === "mic") { S[k].mode = "auto"; newTarget(k); } });
     try { localStorage.removeItem("soyogi-mic"); } catch (e) {}
     setM("マイクを止めました。シミュレーションの音量に戻っています。");
     micUI();
@@ -1194,6 +1213,57 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     // 立ち上がりは速く、減衰はゆるやかに（ピークホールド）
     mic.peak = db > mic.peak ? db : mic.peak - 0.35 * dtf;
     if (S.sound.mode === "mic") S.sound.target = clamp(mic.peak, S.sound.min, S.sound.max);
+
+    // 音域ごとの強さ：周波数ごとの強さ（dB）を力に戻して、範囲の中で足し合わせる
+    mic.an.getFloatFrequencyData(mic.fbuf);
+    const hz = mic.rate / mic.an.fftSize;
+    BANDS.forEach(([key, lo, hi], j) => {
+      let pw = 0;
+      for (let b = Math.max(1, Math.floor(lo / hz)); b <= Math.min(mic.fbuf.length - 1, Math.ceil(hi / hz)); b++) pw += Math.pow(10, mic.fbuf[b] / 10);
+      const bdb = 10 * Math.log10(pw + 1e-12) + BAND_OFFSET + mic.gain;
+      mic.bands[j] = bdb > mic.bands[j] ? bdb : mic.bands[j] - 0.35 * dtf;
+      if (S[key].mode === "mic") S[key].target = clamp(mic.bands[j], S[key].min, S[key].max);
+    });
+
+    // 音程：音がある程度大きいときだけ、自己相関で一番はっきりした周期を探す（1 フレームおき）
+    if ((mic.tick = (mic.tick + 1) % 2) === 0 && db > 42 && S.pitch.mode === "mic") {
+      const f = detectPitch(mic.buf, mic.rate);
+      if (f) S.pitch.target = clamp(f, S.pitch.min, S.pitch.max);   // 見つからなければ前の高さのまま
+    }
+  }
+  const BANDS = [["bass", 20, 250], ["midr", 250, 2000], ["treble", 2000, 8000]];
+  const BAND_OFFSET = 95 + 9;   // テスト音で 音量 と同じくらいの dB になるよう合わせた値
+  // 2 つおきに間引いて（約 24 kHz）、80〜2000 Hz の周期を自己相関で探す
+  function detectPitch(buf, rate) {
+    const n = buf.length >> 1, x = new Float32Array(n);
+    for (let i = 0; i < n; i++) x[i] = (buf[2 * i] + buf[2 * i + 1]) * 0.5;
+    const sr = rate / 2, minLag = Math.floor(sr / 2000), maxLag = Math.min(n >> 1, Math.ceil(sr / 80)), m = n - maxLag;
+    let e0 = 0;
+    for (let i = 0; i < m; i++) e0 += x[i] * x[i];
+    if (e0 < 1e-6) return 0;
+    const r = new Float32Array(maxLag + 2);
+    let best = -1, bestLag = 0;
+    for (let lag = minLag; lag <= maxLag + 1; lag++) {
+      let c = 0, e1 = 0;
+      for (let i = 0; i < m; i++) { c += x[i] * x[i + lag]; e1 += x[i + lag] * x[i + lag]; }
+      r[lag] = c / Math.sqrt(e0 * e1 + 1e-12);
+    }
+    // 最初に 0.85 × 最大値 を超えた山を選ぶ（倍の周期を取り違えないように）
+    for (let lag = minLag; lag <= maxLag; lag++) if (r[lag] > best) best = r[lag];
+    if (best < 0.6) return 0;   // はっきりした高さがない（雑音など）
+    for (let lag = minLag + 1; lag <= maxLag; lag++) {
+      if (r[lag] >= 0.85 * best && r[lag] >= r[lag - 1] && r[lag] >= r[lag + 1]) { bestLag = lag; break; }
+    }
+    if (!bestLag) return 0;
+    // 範囲より高い音（2000 Hz 超）は、その 2〜4 倍の周期も山になるので取り違える。もっと短い周期が同じくらい強ければ、範囲の上端とする
+    const corr = (lag) => { let c = 0, e1 = 0; for (let i = 0; i < m; i++) { c += x[i] * x[i + lag]; e1 += x[i + lag] * x[i + lag]; } return c / Math.sqrt(e0 * e1 + 1e-12); };
+    for (let k = 2; k <= 4; k++) {
+      const l = Math.round(bestLag / k);
+      if (l >= 2 && l < minLag && Math.max(corr(l), corr(l + 1), corr(Math.max(2, l - 1))) >= 0.85 * best) return 2000;
+    }
+    const a = r[bestLag - 1], b = r[bestLag], c = r[bestLag + 1], d = a - 2 * b + c;
+    const shift = d ? 0.5 * (a - c) / d : 0;   // 山の頂上を細かく推定
+    return sr / (bestLag + shift);
   }
   $("mic-btn").addEventListener("click", () => (mic.on ? stopMic() : startMic()));
   $("mic-gain").addEventListener("input", (e) => {
