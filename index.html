@@ -124,6 +124,9 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
 .wx-status { margin: 0; font-size: 13px; line-height: 1.6; color: var(--muted); }
 .wx-status.ok { color: var(--accent); }
 .wx-status.err { color: var(--manual); }
+.mic-gain { display: flex; align-items: center; gap: 8px; flex: 1 1 12em; min-width: 0; font-size: 13px; color: var(--muted); }
+.mic-gain input { flex: 1; min-width: 0; accent-color: var(--accent); }
+.mic-gain .num { width: 2.6em; }
 .note { max-width: 68ch; display: grid; gap: 8px; padding-top: 20px; border-top: 1px solid var(--line); }
 .note h2 { margin: 0; font-family: var(--f-display); font-weight: 600; font-size: 20px; letter-spacing: .06em; }
 .note p { margin: 0; }
@@ -180,6 +183,17 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
         </form>
         <p class="wx-status" id="wx-status">いまはシミュレーションの天気で動いています。</p>
       </div>
+      <div class="wx">
+        <p class="label">マイクを音量につなぐ</p>
+        <div class="wx-form">
+          <button class="btn" type="button" id="mic-btn" aria-pressed="false">マイクをつなぐ</button>
+          <label class="mic-gain" for="mic-gain">感度
+            <input type="range" id="mic-gain" min="-20" max="20" step="1" value="0">
+            <span class="num" id="mic-gain-num">±0</span>
+          </label>
+        </div>
+        <p class="wx-status" id="mic-status">いまはシミュレーションの音量で動いています。音はこのページの中で大きさを測るだけで、録音も送信もしません。</p>
+      </div>
       <details class="env" id="env">
         <summary>環境を手で動かす</summary>
         <div id="env-rows"></div>
@@ -200,7 +214,9 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     </ol>
     <p>すべての値は 0 から 1 の間に揃えてから表現に渡します。<code>#</code> から後ろはメモとして読み飛ばします。</p>
     <h2>実際の天気について</h2>
-    <p>気温・風・風向・雨・雲・湿度は、Open-Meteo の気象データにつなぐと実際の値になります（10分ごとに更新）。claude.ai の中で開いているときは外への通信が止められているので、シミュレーションの値で動きます。このHTMLファイルを自分のブラウザや Raspberry Pi の画面で開くと、そのまま実際の天気に反応します。音量と照度は、今後マイクやセンサーにつなぐ予定です。</p>
+    <p>気温・風・風向・雨・雲・湿度は、Open-Meteo の気象データにつなぐと実際の値になります（10分ごとに更新）。claude.ai の中で開いているときは外への通信が止められているので、シミュレーションの値で動きます。このHTMLファイルを自分のブラウザや Raspberry Pi の画面で開くと、そのまま実際の天気に反応します。照度は、今後センサーにつなぐ予定です。</p>
+    <h2>マイクについて</h2>
+    <p>「マイクをつなぐ」を押すと、音量 がその場の実際の音の大きさになります。測るのは大きさだけで、録音も送信もしません。静かな部屋で 35 dB 前後、話し声で 60 dB 前後になるよう合わせてあり、場所によって合わないときは 感度 で上下させます。ブラウザの決まりで、https か localhost、または自分のパソコンのファイルとして開いたときに使えます。</p>
     <p>風向は「風が吹いてくる方角」で、北が 0、東が 0.25、南が 0.5、西が 0.75 です。<code>方角 ← 風向</code> と書くと、線は風下へ流れます。</p>
   </section>
 </div>
@@ -570,7 +586,8 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
   $("btn-auto").addEventListener("click", () => {
     KEYS.forEach((k) => {
       if (S[k].mode !== "manual") return;
-      if (weather.connected && WEATHER_KEYS.includes(k)) { S[k].mode = "weather"; S[k].target = weather.values[k]; }
+      if (k === "sound" && mic.on) { S[k].mode = "mic"; }
+      else if (weather.connected && WEATHER_KEYS.includes(k)) { S[k].mode = "weather"; S[k].target = weather.values[k]; }
       else { S[k].mode = "auto"; newTarget(k); }
     });
     uiTick();
@@ -756,7 +773,9 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     const dtf = clamp((now - last) / 16.667, 0.2, 3), dtSec = dtf / 60;
     last = now; tSec += dtSec;
     const ease = 1 - Math.pow(0.994, dtf);
-    KEYS.forEach((k) => { const s = S[k]; if (s.mode !== "manual") s.value += (s.target - s.value) * ease; });
+    if (mic.on) micTick(dtf);
+    const fast = 1 - Math.pow(0.82, dtf);   // マイクは息や拍手にすぐ応えるように
+    KEYS.forEach((k) => { const s = S[k]; if (s.mode !== "manual") s.value += (s.target - s.value) * (s.mode === "mic" ? fast : ease); });
     if (now - presence.last > 500) presence.p = Math.max(0, presence.p - 0.006 * dtf);
     ENV = envValues(tSec);
     OUT_ORDER.forEach((k) => {
@@ -787,7 +806,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
       const s = S[k];
       $("num-" + k).textContent = s.value.toFixed(s.dec);
       if (s.mode === "auto") $("in-" + k).value = s.value.toFixed(s.dec);
-      setChip($("chip-" + k), s.mode === "auto" ? "sim" : s.mode === "weather" ? "real" : "manual", s.mode === "auto" ? "シミュ" : s.mode === "weather" ? "実測" : "手動");
+      setChip($("chip-" + k), s.mode === "auto" ? "sim" : (s.mode === "weather" || s.mode === "mic") ? "real" : "manual", s.mode === "auto" ? "シミュ" : s.mode === "weather" ? "実測" : s.mode === "mic" ? "マイク" : "手動");
     });
     const here = presence.p > 0.15;
     $("num-presence").textContent = here ? "あり" : "なし";
@@ -861,6 +880,73 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     const place = localStorage.getItem("soyogi-place");
     if (place === "@here") connectHere();
     else if (place) { $("wx-city").value = place; connectByCity(place); }
+  } catch (e) {}
+
+  /* ================= Microphone (Web Audio) ================= */
+  // 音の大きさ（RMS）だけを測り、dBFS をおおよその dB に置き換えて 音量 に渡す。
+  // 静かな部屋で 35 前後、話し声で 60 前後になるよう +95 を基準にし、感度で上下させる。
+  const mic = { on: false, ac: null, an: null, buf: null, stream: null, gain: 0, peak: 0 };
+  function setM(text, kind) { const el = $("mic-status"); el.textContent = text; el.className = "wx-status" + (kind ? " " + kind : ""); }
+  function micUI() {
+    const b = $("mic-btn");
+    b.textContent = mic.on ? "マイクを止める" : "マイクをつなぐ";
+    b.setAttribute("aria-pressed", mic.on ? "true" : "false");
+  }
+  async function startMic() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { setM("この環境ではマイクを使えません。https か localhost で開いてください。", "err"); return; }
+    setM("マイクの許可を待っています…");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+      const ac = new (window.AudioContext || window.webkitAudioContext)();
+      if (ac.state === "suspended") await ac.resume();
+      const an = ac.createAnalyser();
+      an.fftSize = 2048;
+      an.smoothingTimeConstant = 0;
+      ac.createMediaStreamSource(stream).connect(an);
+      Object.assign(mic, { on: true, ac, an, stream, buf: new Float32Array(an.fftSize), peak: 0 });
+      if (S.sound.mode !== "manual") S.sound.mode = "mic";
+      try { localStorage.setItem("soyogi-mic", "1"); } catch (e) {}
+      setM("マイクにつながっています。音量 はこの場所の実際の音で動きます。", "ok");
+    } catch (e) {
+      const denied = e && (e.name === "NotAllowedError" || e.name === "SecurityError");
+      setM(denied
+        ? "マイクを使えませんでした（許可されていないか、claude.ai の中で開いています）。HTMLファイルを自分のブラウザで開くと使えます。"
+        : "マイクが見つかりませんでした。つながっているか確かめてください。", "err");
+    }
+    micUI();
+  }
+  function stopMic() {
+    if (mic.stream) mic.stream.getTracks().forEach((t) => t.stop());
+    if (mic.ac) mic.ac.close().catch(() => {});
+    Object.assign(mic, { on: false, ac: null, an: null, stream: null });
+    if (S.sound.mode === "mic") { S.sound.mode = "auto"; newTarget("sound"); }
+    try { localStorage.removeItem("soyogi-mic"); } catch (e) {}
+    setM("マイクを止めました。シミュレーションの音量に戻っています。");
+    micUI();
+  }
+  function micTick(dtf) {
+    if (!mic.an) return;
+    mic.an.getFloatTimeDomainData(mic.buf);
+    let sum = 0;
+    for (let i = 0; i < mic.buf.length; i++) sum += mic.buf[i] * mic.buf[i];
+    const db = 20 * Math.log10(Math.sqrt(sum / mic.buf.length) + 1e-9) + 95 + mic.gain;
+    // 立ち上がりは速く、減衰はゆるやかに（ピークホールド）
+    mic.peak = db > mic.peak ? db : mic.peak - 0.35 * dtf;
+    if (S.sound.mode === "mic") S.sound.target = clamp(mic.peak, S.sound.min, S.sound.max);
+  }
+  $("mic-btn").addEventListener("click", () => (mic.on ? stopMic() : startMic()));
+  $("mic-gain").addEventListener("input", (e) => {
+    mic.gain = parseFloat(e.target.value);
+    $("mic-gain-num").textContent = (mic.gain > 0 ? "+" : mic.gain < 0 ? "−" : "±") + Math.abs(mic.gain);
+    try { localStorage.setItem("soyogi-mic-gain", String(mic.gain)); } catch (e2) {}
+  });
+  try {
+    const g = localStorage.getItem("soyogi-mic-gain");
+    if (g) { $("mic-gain").value = g; $("mic-gain").dispatchEvent(new Event("input")); }
+    // 前回つないでいて、すでに許可がある場合だけ自動でつなぐ（許可ダイアログを勝手に出さない）
+    if (localStorage.getItem("soyogi-mic") && navigator.permissions) {
+      navigator.permissions.query({ name: "microphone" }).then((p) => { if (p.state === "granted") startMic(); }).catch(() => {});
+    }
   } catch (e) {}
 
   /* ================= Start ================= */
