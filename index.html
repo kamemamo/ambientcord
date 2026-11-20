@@ -80,6 +80,12 @@ body.show .show-hint.on { opacity: 1; }
 .ln .lm i { display: block; height: 100%; width: calc(var(--v, 0) * 100%); background: var(--accent); }
 .ln.live .lm { display: block; }
 .ln.live.shadowed .lm i { background: var(--muted); opacity: .5; }
+/* ソロ：一行だけ動かす。ほかの行は薄く、ソロの行は左に印 */
+.ed.soloing .ln:not(.solo) { opacity: .38; }
+.ln.solo { box-shadow: inset 3px 0 0 var(--accent); }
+.ln.solo::before { color: var(--accent); font-weight: 500; }
+.solo-note { margin: 0; font-size: 13px; color: var(--accent); }
+.solo-note button { font: inherit; font-size: 12px; margin-left: 8px; padding: 2px 8px; color: var(--accent); background: transparent; border: 1px solid currentColor; border-radius: 999px; cursor: pointer; }
 .ln.live { background: color-mix(in srgb, var(--accent) calc(var(--f, 0) * 22%), transparent); transition: background-color .08s; }
 .ln.bad::before { color: var(--err); font-weight: 500; }
 .t-out { color: var(--c-out); font-weight: 500; }
@@ -191,6 +197,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
         <textarea id="src" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="そよぎのコード"></textarea>
       </div>
       <p class="status" id="status"></p>
+      <p class="solo-note" id="solo-note" hidden></p>
       <ul class="errs" id="errs"></ul>
       <div class="btns">
         <span class="label">見本</span>
@@ -200,7 +207,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
         <button class="btn" type="button" id="btn-copy">コピー</button>
       </div>
       <div class="vocab" id="vocab">
-        <p class="vhint">言葉をタップすると、カーソルの位置に入ります。</p>
+        <p class="vhint">言葉をタップすると、カーソルの位置に入ります。行番号を押すと、その行だけを動かせます。</p>
       </div>
     </section>
 
@@ -259,6 +266,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
       <li>環境どうしは <code>と</code> でつなぐと平均になります。数値（0〜1）もそのまま書けます。</li>
       <li>右に言葉を足すと値が変わります。<code>反転</code>・<code>× 0.5</code>・<code>+ 0.2</code>・<code>段階 4</code>・<code>ゆっくり</code>・<code>なじむ</code>、線の色には <code>青 … 橙</code> のような色のつながり、渦には <code>近く 30</code>。</li>
     </ol>
+    <p>各行の右端のバーは、その行がいま渡している値です。行番号を押すと、その行だけが動き、ほかの行は止まります（もう一度押すか Esc で戻ります）。</p>
     <p>すべての値は 0 から 1 の間に揃えてから表現に渡します。<code>#</code> から後ろはメモとして読み飛ばします。</p>
     <p>何も書かなければ、何も描かれません。<code>空</code> を書くと空の色が、<code>光</code> を書くと太陽・月が、粒の言葉（粒・粒の色・粒の大きさ・粒の速さ）を一つでも書くと流れに漂う粒が、線の言葉（線の色・速さ・軌跡・向き・方角・渦・太さ・数・乱れ）を一つでも書くと流れが現れます。書かなかった言葉は既定の値で動きます。行を消すと、その部分はゆっくり消えていきます。</p>
     <h2>早見表：数値と見え方</h2>
@@ -538,11 +546,52 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
   // 動いている行（後の行に上書きされた行は薄く）に値のバーを出す
   function markLiveLines() {
     const used = new Set(Object.values(program).map((b) => b.line));
+    // 書き換えで、ソロの行が動く行でなくなったらソロをやめる
+    if (solo != null && !used.has(solo)) setSolo(null);
     lineEls.forEach((el, i) => {
       el.classList.toggle("live", lineState[i] === "ok" || lineState[i] === "warn");
       el.classList.toggle("shadowed", !used.has(i));
+      el.classList.toggle("solo", i === solo);
     });
+    document.querySelector(".ed").classList.toggle("soloing", solo != null);
   }
+
+  /* ソロ：行番号を押すと、その行だけが環境に従って動く。
+     ほかの行はその時点の値で止まるので、絵はそのままで、その行の影響だけが見える。 */
+  let solo = null;
+  function setSolo(i) {
+    solo = i;
+    const note = $("solo-note");
+    if (i == null) { note.hidden = true; note.textContent = ""; }
+    else {
+      note.hidden = false;
+      note.innerHTML = `${i + 1}行目だけを動かしています。ほかの行は止まっています。<button type="button" id="solo-off">すべて動かす</button>`;
+      $("solo-off").addEventListener("click", () => { setSolo(null); src.focus(); });
+    }
+    if (lineEls.length) markLiveLines();
+  }
+  function gutterLine(e) {
+    const r = src.getBoundingClientRect();
+    if (e.clientX - r.left >= parseFloat(getComputedStyle(src).paddingLeft)) return -1;   // 行番号の列だけ
+    for (let i = 0; i < lineEls.length; i++) {
+      const lr = lineEls[i].getBoundingClientRect();
+      if (e.clientY >= lr.top && e.clientY < lr.bottom) return i;
+    }
+    return -1;
+  }
+  src.addEventListener("pointerdown", (e) => {
+    const i = gutterLine(e);
+    if (i < 0) return;
+    const live = Object.values(program).some((b) => b.line === i);
+    if (!live) return;
+    e.preventDefault();   // カーソルを動かさない
+    setSolo(solo === i ? null : i);
+  });
+  src.addEventListener("pointermove", (e) => {
+    const i = gutterLine(e);
+    src.style.cursor = i >= 0 && Object.values(program).some((b) => b.line === i) ? "pointer" : "";
+  });
+  src.addEventListener("keydown", (e) => { if (e.key === "Escape" && solo != null) setSolo(null); });
   function meterTick() {
     for (const k in program) {
       const b = program[k], el = lineEls[b.line];
@@ -1090,6 +1139,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     ENV = envValues(tSec);
     OUT_ORDER.forEach((k) => {
       const b = program[k];
+      if (solo != null && !(b && b.line === solo)) return;   // ソロのときは、ほかの行の値を止める
       const target = b ? evalBinding(b, ENV, dtSec) : OUT_INFO[k].def;
       P[k] += (target - P[k]) * (1 - Math.pow(0.85, dtf));   // 書き換えた瞬間も絵がなめらかにつながるように
     });
