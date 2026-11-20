@@ -245,7 +245,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
       <li>右に言葉を足すと値が変わります。<code>反転</code>・<code>× 0.5</code>・<code>+ 0.2</code>・<code>段階 4</code>・<code>ゆっくり</code>、線の色には <code>青 … 橙</code> のような色のつながり、渦には <code>近く 30</code>。</li>
     </ol>
     <p>すべての値は 0 から 1 の間に揃えてから表現に渡します。<code>#</code> から後ろはメモとして読み飛ばします。</p>
-    <p>何も書かなければ、何も描かれません。<code>空</code> を書くと空と太陽・月が、線の言葉（線の色・速さ・軌跡・向き・方角・渦・太さ・数・乱れ）を一つでも書くと流れが現れます。書かなかった言葉は既定の値で動きます。行を消すと、その部分はゆっくり消えていきます。</p>
+    <p>何も書かなければ、何も描かれません。<code>空</code> を書くと空の色が、<code>光</code> を書くと太陽・月が、線の言葉（線の色・速さ・軌跡・向き・方角・渦・太さ・数・乱れ）を一つでも書くと流れが現れます。書かなかった言葉は既定の値で動きます。行を消すと、その部分はゆっくり消えていきます。</p>
     <h2>実際の天気について</h2>
     <p>気温・風・風向・雨・雲・湿度は、Open-Meteo の気象データにつなぐと実際の値になります（10分ごとに更新）。claude.ai の中で開いているときは外への通信が止められているので、シミュレーションの値で動きます。このHTMLファイルを自分のブラウザや Raspberry Pi の画面で開くと、そのまま実際の天気に反応します。音量はマイク、照度は照度センサーかカメラにつなげます。</p>
     <h2>マイクについて</h2>
@@ -270,9 +270,10 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
   const view = { show: false, cap: false, lite: false, fs: false };   // 展示モードの状態
 
   /* ================= Language: vocabulary ================= */
-  const OUT = { "空の色": "sky", "空": "sky", "線の色": "color", "色": "color", "速さ": "speed", "軌跡": "trail", "向き": "drift", "方角": "heading", "渦": "swirl", "太さ": "width", "数": "count", "乱れ": "turb" };
+  const OUT = { "空の色": "sky", "空": "sky", "光": "orb", "線の色": "color", "色": "color", "速さ": "speed", "軌跡": "trail", "向き": "drift", "方角": "heading", "渦": "swirl", "太さ": "width", "数": "count", "乱れ": "turb" };
   const OUT_INFO = {
-    sky:   { name: "空",     def: 0.5,  tip: "空の色と太陽・月（0 深夜 / 0.5 正午）" },
+    sky:   { name: "空",     def: 0.5,  tip: "空の色（0 深夜 / 0.5 正午）" },
+    orb:   { name: "光",     def: 0.5,  tip: "太陽・月の位置（0 深夜 / 0.5 正午）" },
     color: { name: "線の色", def: 0.5,  tip: "色のつながりの中の位置" },
     speed: { name: "速さ",   def: 0.25, tip: "流れの速さ" },
     trail: { name: "軌跡",   def: 0.3,  tip: "線が残る長さ" },
@@ -299,7 +300,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
   MODS.forEach((w) => WORD_CAT[w] = "mod");
   Object.keys(COLORS).forEach((w) => WORD_CAT[w] = "col");
   const hsl = (c) => `hsl(${c[0]},${c[1]}%,${c[2]}%)`;
-  const OUT_NAMES = "空・線の色・速さ・軌跡・向き・方角・渦・太さ・数・乱れ";
+  const OUT_NAMES = "空・光・線の色・速さ・軌跡・向き・方角・渦・太さ・数・乱れ";
   const IN_NAMES = IN_LIST.join("・");
 
   /* ================= Language: tokenizer & parser ================= */
@@ -481,6 +482,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
   const PRESETS = {
     window: `# 試作01「環境の窓」をそよぎで書いたもの
 空     ← 時刻
+光     ← 時刻
 線の色 ← 気温   青 … 橙
 速さ   ← 音量
 軌跡   ← 照度   反転
@@ -490,6 +492,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
 `,
     night: `# 人がいなくても、ゆっくり呼吸するように
 空     ← 0.05
+光     ← 0.05     # 月
 線の色 ← ゆらぎ   藍 … 紫 … 桃
 速さ   ← ゆらぎ × 0.3
 軌跡   ← 0.9
@@ -498,6 +501,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
 `,
     noise: `# 音がすべてを決める
 空     ← 時刻
+光     ← 時刻
 線の色 ← 音量   緑 … 黄 … 赤   段階 4
 速さ   ← 音量 × 1.2
 乱れ   ← 音量 と 風
@@ -565,6 +569,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
       const flowOn = FLOW_KEYS.some((x) => program[x]);
       v.src.textContent = b ? "← " + b.text
         : k === "sky" ? "書かれていないので、空はありません"
+        : k === "orb" ? "書かれていないので、太陽・月はありません"
         : !flowOn ? "線の言葉が書かれていないので、流れはありません"
         : "書かれていないので既定の値";
     });
@@ -709,9 +714,9 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
   }
   const DEFAULT_RAMP = [COLORS["青"], COLORS["橙"]];
   const VOID = [9, 11, 10];   // 何も書かれていないときの色
-  const FLOW_KEYS = OUT_ORDER.filter((k) => k !== "sky");
-  const layerTarget = () => ({ sky: program.sky ? 1 : 0, flow: FLOW_KEYS.some((k) => program[k]) ? 1 : 0 });
-  const layer = { sky: 0, flow: 0 };
+  const FLOW_KEYS = OUT_ORDER.filter((k) => k !== "sky" && k !== "orb");
+  const layerTarget = () => ({ sky: program.sky ? 1 : 0, orb: program.orb ? 1 : 0, flow: FLOW_KEYS.some((k) => program[k]) ? 1 : 0 });
+  const layer = { sky: 0, orb: 0, flow: 0 };
 
   const stage = $("stage"), cv = $("cv"), ctx = cv.getContext("2d");
   let W = 1, H = 1, N = 0, px, py, life, tz = Math.random() * 100, windOff = 0, tSec = 0;
@@ -745,7 +750,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     // 流れが消えていくときは塗り重ねを強めて、線の跡が薄く残り続けないようにする
     const fadeA = clamp((0.012 + 0.07 * (1 - P.trail) + 0.2 * (1 - layer.flow)) * dtf, 0, 0.3);
     paintSky(sk, fadeA);
-    if (layer.sky > 0.01) drawOrb(h, fadeA * layer.sky);
+    if (layer.orb > 0.01) drawOrb(P.orb * 24, fadeA * layer.orb);
     if (layer.flow < 0.005) return;
 
     const slow = reduce ? 0.3 : 1, md = Math.min(W, H), scale = clamp(md / 600, 0.7, 1.6);
@@ -845,6 +850,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     const lt = layerTarget(), le = 1 - Math.pow(0.97, dtf);   // 現れる・消えるは1秒ほどかけて
     layer.sky += (lt.sky - layer.sky) * le;
     layer.flow += (lt.flow - layer.flow) * le;
+    layer.orb += (lt.orb - layer.orb) * le;
     if (N > 0) step(dtf);
     requestAnimationFrame(frame);
   }
