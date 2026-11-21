@@ -268,7 +268,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     </ol>
     <p>各行の右端のバーは、その行がいま渡している値です。行番号を押すと、その行だけが動き、ほかの行は止まります（もう一度押すか Esc で戻ります）。</p>
     <p>すべての値は 0 から 1 の間に揃えてから表現に渡します。<code>#</code> から後ろはメモとして読み飛ばします。</p>
-    <p>何も書かなければ、何も描かれません。<code>空</code> を書くと空の色が、<code>光</code> を書くと太陽・月が、粒の言葉（粒・粒の色・粒の大きさ・粒の速さ）を一つでも書くと流れに漂う粒が、線の言葉（線の色・速さ・軌跡・向き・方角・渦・太さ・数・乱れ）を一つでも書くと流れが現れます。書かなかった言葉は既定の値で動きます。行を消すと、その部分はゆっくり消えていきます。</p>
+    <p>何も書かなければ、何も描かれません。<code>空</code> を書くと空の色が、<code>光</code> を書くと太陽・月が、粒の言葉（粒・粒の色・粒の大きさ・粒の速さ）を一つでも書くと流れに漂う粒が、線の言葉（線の色・速さ・軌跡・向き・方角・渦・太さ・数・乱れ）を一つでも書くと流れが現れます。<code>にじみ</code> と <code>うねり</code>（流れのねじれ・ときどき来る大きな渦）は、線や粒にかかる効果です。書かなかったものは何も起きず、流れは書いたとおりにだけ動きます。色は書いた色のまま描きます。書かなかった言葉は既定の値で動きます。行を消すと、その部分はゆっくり消えていきます。</p>
     <h2>早見表：数値と見え方</h2>
     <p>表現は 0〜1 の値で見え方が決まります。環境は実際の値を 0〜1 に換算して渡します。数値を直接書くときの目安にしてください（例：<code>空 ← 0.75</code> は夕方6時の空）。</p>
     <div class="tbl-wrap"><table class="tbl" id="tbl-out"></table></div>
@@ -297,7 +297,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
   const view = { show: false, cap: false, lite: false, fs: false };   // 展示モードの状態
 
   /* ================= Language: vocabulary ================= */
-  const OUT = { "空の色": "sky", "空": "sky", "光": "orb", "粒": "grain", "粒の色": "gcolor", "粒の大きさ": "gsize", "粒の速さ": "gspeed", "にじみ": "bleed", "線の色": "color", "色": "color", "速さ": "speed", "軌跡": "trail", "向き": "drift", "方角": "heading", "渦": "swirl", "太さ": "width", "数": "count", "乱れ": "turb" };
+  const OUT = { "空の色": "sky", "空": "sky", "光": "orb", "粒": "grain", "粒の色": "gcolor", "粒の大きさ": "gsize", "粒の速さ": "gspeed", "にじみ": "bleed", "うねり": "unr", "線の色": "color", "色": "color", "速さ": "speed", "軌跡": "trail", "向き": "drift", "方角": "heading", "渦": "swirl", "太さ": "width", "数": "count", "乱れ": "turb" };
   const OUT_INFO = {
     sky:   { name: "空",     def: 0.5,  tip: "空の色（0 深夜 / 0.5 正午）" },
     orb:   { name: "光",     def: 0.5,  tip: "太陽・月の位置（0 深夜 / 0.5 正午）" },
@@ -306,6 +306,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     gsize: { name: "粒の大きさ", def: 0.35, tip: "粒の大きさ" },
     gspeed: { name: "粒の速さ", def: 0.15, tip: "粒の漂う速さ" },
     bleed: { name: "にじみ", def: 0.5,  tip: "線や粒のまわりのにじみ" },
+    unr:   { name: "うねり", def: 0.5,  tip: "流れのねじれ・ゆっくりした変化・ときどき来る大きな渦" },
     color: { name: "線の色", def: 0.5,  tip: "色のつながりの中の位置" },
     speed: { name: "速さ",   def: 0.25, tip: "流れの速さ" },
     trail: { name: "軌跡",   def: 0.3,  tip: "線が残る長さ" },
@@ -327,6 +328,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     gsize: ["とても小さい（0.3 倍）", "やや大きい（1.3 倍）", "大きい（2.3 倍）", "既定 0.35 で 1 倍。一粒ずつの大きさの違いは残る"],
     gspeed: ["ほぼ止まる", "線のふつうの速さくらい", "速い", "既定 0.15。線の 速さ とは別"],
     bleed: ["くっきり", "ふんわり", "大きくにじむ", "線や粒がないと見えない"],
+    unr:   ["うねりなし", "ときどき大きな渦が来る", "よく渦が来て、模様も大きくねじれる", "線や粒がないと見えない。書かなければ流れは書いたとおりにだけ動く"],
     color: ["つながりの最初の色", "つながりの真ん中", "つながりの最後の色", "書かないときのつながりは 青 … 橙"],
     speed: ["ゆっくり", "ふつう", "速い", ""],
     trail: ["すぐ消える", "中くらい", "長く残る", "長いほど、絵が描き重なる"],
@@ -369,7 +371,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
   MODS.forEach((w) => WORD_CAT[w] = "mod");
   Object.keys(COLORS).forEach((w) => WORD_CAT[w] = "col");
   const hsl = (c) => `hsl(${c[0]},${c[1]}%,${c[2]}%)`;
-  const OUT_NAMES = "空・光・粒・粒の色・粒の大きさ・粒の速さ・にじみ・線の色・速さ・軌跡・向き・方角・渦・太さ・数・乱れ";
+  const OUT_NAMES = "空・光・粒・粒の色・粒の大きさ・粒の速さ・にじみ・うねり・線の色・速さ・軌跡・向き・方角・渦・太さ・数・乱れ";
   const IN_NAMES = IN_LIST.join("・");
 
   /* ================= Language: tokenizer & parser ================= */
@@ -621,6 +623,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
 向き   ← 風
 方角   ← 風向     # 実際の天気につなぐと、本物の風の向きに流れる
 渦     ← 気配   近く 22
+うねり ← 風              # 風が強いほど大きな渦が来る
 `,
     night: `# 人がいなくても、ゆっくり呼吸するように
 空     ← 0.05
@@ -632,6 +635,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
 軌跡   ← 0.9
 太さ   ← ゆらぎ 反転 × 0.6
 渦     ← 気配 ゆっくり 2   近く 35
+うねり ← ゆらぎ × 0.6
 `,
     noise: `# 音がすべてを決める
 空     ← 時刻
@@ -642,6 +646,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
 数     ← 音量 + 0.3
 軌跡   ← 0.2
 渦     ← 気配
+うねり ← 音量 なじむ
 `
   };
   function setText(t) { src.value = t; compile(t); paint(); try { localStorage.setItem("soyogi-draft", t); } catch (e) {} }
@@ -656,8 +661,8 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
   // vocabulary chips
   const VG = [
     ["表現（← の左）", Object.values(OUT_INFO).map((o) => [o.name, "out", o.tip])],
-    ["環境（← の右）", IN_LIST.map((w) => [w, "in"])],
     ["つなぎ・調整", [["←", "mod"], ["と", "mod"], ["反転", "mod"], ["ゆっくり", "mod"], ["なじむ", "mod"], ["×", "mod"], ["+", "mod"], ["段階", "mod"], ["近く", "mod"], ["…", "mod"]]],
+    ["環境（← の右）", IN_LIST.map((w) => [w, "in"])],
     ["色", Object.keys(COLORS).map((w) => [w, "col"])]
   ];
   const vocab = $("vocab");
@@ -718,6 +723,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
         : k === "orb" ? "書かれていないので、太陽・月はありません"
         : GRAIN_KEYS.includes(k) ? (GRAIN_KEYS.some((x) => program[x]) ? "書かれていないので既定の値" : "粒の言葉が書かれていないので、粒はありません")
         : k === "bleed" ? "書かれていないので、にじみはありません"
+        : k === "unr" ? "書かれていないので、うねりはありません（流れは書いたとおりにだけ動く）"
         : !flowOn ? "線の言葉が書かれていないので、流れはありません"
         : "書かれていないので既定の値";
     });
@@ -883,18 +889,40 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     let t = (h - a[0]) / (b[0] - a[0]); t = t * t * (3 - 2 * t);
     return { top: mixc(a[1], b[1], t), bot: mixc(a[2], b[2], t) };
   }
+  // 色のつながり：二つの色を OKLab（人の見え方にそろえた色空間）でまっすぐ混ぜる。
+  // 色相環を回らないので、書いていない第三の色（青 … 橙 の間の緑や紫）は出てこない。
+  const hslToRgb = ([h, s, l]) => { s /= 100; l /= 100; const k = (n) => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+    return [0, 8, 4].map((n) => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1))); };
+  const rgbToHsl = ([r, g, b]) => { const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+    let h = 0, s = 0;
+    if (d > 1e-6) { s = d / (1 - Math.abs(2 * l - 1));
+      h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h = (h * 60 + 360) % 360; }
+    return [h, s * 100, l * 100]; };
+  const toLin = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+  const toSrgb = (c) => clamp(c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055, 0, 1);
+  function hslToLab(hsl) {
+    const [r, g, b] = hslToRgb(hsl).map(toLin);
+    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+    const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+    const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
+  }
+  function labToHsl([L, A, B]) {
+    const l = Math.pow(L + 0.3963377774 * A + 0.2158037573 * B, 3), m = Math.pow(L - 0.1055613458 * A - 0.0638541728 * B, 3), s = Math.pow(L - 0.0894841775 * A - 1.291485548 * B, 3);
+    return rgbToHsl([4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s, -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s, -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s].map(toSrgb));
+  }
   function rampColor(ramp, t) {
     const n = ramp.length - 1, x = clamp(t, 0, 1) * n, i = Math.min(n - 1, Math.floor(x)), f = x - i;
-    const a = ramp[i], b = ramp[i + 1];
-    const ha = a[1] === 0 ? b[0] : a[0], hb = b[1] === 0 ? a[0] : b[0];
-    return [lerp(ha, hb, f), lerp(a[1], b[1], f), lerp(a[2], b[2], f)];
+    const a = hslToLab(ramp[i]), b = hslToLab(ramp[i + 1]);
+    return labToHsl([lerp(a[0], b[0], f), lerp(a[1], b[1], f), lerp(a[2], b[2], f)]);
   }
+
   const DEFAULT_RAMP = [COLORS["青"], COLORS["橙"]];
   const VOID = [9, 11, 10];   // 何も書かれていないときの色
   const GRAIN_KEYS = ["grain", "gcolor", "gsize", "gspeed"];   // どれか一つでも書くと粒が現れる
-  const FLOW_KEYS = OUT_ORDER.filter((k) => k !== "sky" && k !== "orb" && k !== "bleed" && !GRAIN_KEYS.includes(k));
-  const layerTarget = () => ({ sky: program.sky ? 1 : 0, orb: program.orb ? 1 : 0, grain: GRAIN_KEYS.some((k) => program[k]) ? 1 : 0, bleed: program.bleed ? 1 : 0, flow: FLOW_KEYS.some((k) => program[k]) ? 1 : 0 });
-  const layer = { sky: 0, orb: 0, grain: 0, bleed: 0, flow: 0 };
+  const FLOW_KEYS = OUT_ORDER.filter((k) => k !== "sky" && k !== "orb" && k !== "bleed" && k !== "unr" && !GRAIN_KEYS.includes(k));
+  const layerTarget = () => ({ sky: program.sky ? 1 : 0, orb: program.orb ? 1 : 0, grain: GRAIN_KEYS.some((k) => program[k]) ? 1 : 0, bleed: program.bleed ? 1 : 0, unr: program.unr ? 1 : 0, flow: FLOW_KEYS.some((k) => program[k]) ? 1 : 0 });
+  const layer = { sky: 0, orb: 0, grain: 0, bleed: 0, unr: 0, flow: 0 };
 
   const stage = $("stage"), cv = $("cv"), ctx = cv.getContext("2d");
   let W = 1, H = 1, N = 0, px, py, life, spd, tz = Math.random() * 100, windOff = 0, tSec = 0;
@@ -914,16 +942,16 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
      いつ・どこに・どちら回りで来るかは決まっていないので、流れの先が読めなくなる。 */
   const gusts = [];
   let nextGust = 6 + Math.random() * 14;
-  function updateGusts(dtf) {
+  function updateGusts(dtf, u) {
     const md = Math.min(W, H), dt = dtf / 60;
     if (tSec > nextGust) {
-      if (gusts.length < 2) {
+      if (gusts.length < 2 && u > 0.02 && Math.random() < 0.25 + 0.75 * u) {   // うねりが強いほどよく来る
         const ang = Math.random() * Math.PI * 2, v = md * (0.0003 + Math.random() * 0.0006);
         gusts.push({ x: Math.random() * W, y: Math.random() * H, vx: Math.cos(ang) * v, vy: Math.sin(ang) * v,
           r: md * (0.18 + Math.random() * 0.32), dir: Math.random() < 0.5 ? -1 : 1,
           amp: 0.5 + Math.random() * 0.9, age: 0, dur: 10 + Math.random() * 22, env: 0 });
       }
-      nextGust = tSec + 8 + Math.random() * 30;
+      nextGust = tSec + (8 + Math.random() * 30) * (1.4 - 0.8 * u);
     }
     for (let k = gusts.length - 1; k >= 0; k--) {
       const g = gusts[k];
@@ -973,18 +1001,21 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     windOff += w * 0.006 * slow * dtf;
     const ns0 = (0.6 + P.turb * 4.7) * 1.2 / md;
     // 数分かけて、模様の大きさ・全体の向き・ねじれの強さがゆっくり変わる（どれも別々の周期）
-    const ns = ns0 * (1 + 0.35 * noise(tSec * 0.011, 4.2, 1.7));
-    const rot = noise(tSec * 0.008, 8.8, 3.1) * 2.4;
-    const warp = 1.3 + 1.2 * noise(tSec * 0.017, 2.2, 5.5);
+    // うねり：書いたときだけ、模様の大きさ・全体の向き・ねじれが数分かけて変わり、ときどき大きな渦が来る
+    const u = P.unr * layer.unr;
+    const ns = ns0 * (1 + 0.35 * u * noise(tSec * 0.011, 4.2, 1.7));
+    const rot = u * noise(tSec * 0.008, 8.8, 3.1) * 2.4;
+    const warp = u * (1.3 + 1.2 * noise(tSec * 0.017, 2.2, 5.5));
     const wsc = ns * 0.42, t2 = tz * 0.33 + 40;
-    updateGusts(dtf);
+    updateGusts(dtf, u);
 
     const pr = P.swirl;
     const sb = program.swirl;
     const R = ((sb && sb.radius) || 22) / 100 * md, R2 = R * R;
     let sx, sy;   // 渦の中心（気配の位置）
     if (performance.now() - presence.last < 3000) { sx = presence.x; sy = presence.y; }
-    else { sx = W * (0.5 + 0.28 * Math.sin(tSec * 0.07)); sy = H * (0.5 + 0.22 * Math.cos(tSec * 0.053)); }
+    else if (presence.x > -1e4) { sx = presence.x; sy = presence.y; }   // 最後に気配があった場所に留まる（勝手には動かない）
+    else { sx = W / 2; sy = H / 2; }
     const turn = 1 - 0.65 * w;
     const toRad = (P.heading * 360 + 180) * Math.PI / 180, hx = Math.sin(toRad), hy = -Math.cos(toRad);
 
@@ -992,7 +1023,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     let fx = 0, fy = 0, fs = 1;
     function field(x, y) {
       // 大きな流れで座標をねじってから向きを決める（ドメインワーピング）。模様が同じ形に落ち着かない
-      const qx = noise(x * wsc + 5.2, y * wsc + 1.3, t2), qy = noise(x * wsc + 9.7, y * wsc + 6.1, t2);
+      const qx = u > 0.005 ? noise(x * wsc + 5.2, y * wsc + 1.3, t2) : 0, qy = u > 0.005 ? noise(x * wsc + 9.7, y * wsc + 6.1, t2) : 0;
       const a = noise(x * ns + windOff + qx * warp, y * ns + qy * warp, tz) * Math.PI * 2.4 + rot;
       const wob = w * 0.15 * Math.sin(tz * 7 + (x + y) * ns);
       let vx = Math.cos(a) * turn + w * 1.25 * hx - hy * wob;
@@ -1000,7 +1031,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
       for (let k = 0; k < gusts.length; k++) {
         const g = gusts[k], dx = x - g.x, dy = y - g.y, d2 = dx * dx + dy * dy;
         if (d2 < g.r * g.r) {
-          const d = Math.sqrt(d2) + 0.001, f = 1 - d / g.r, s = f * f * g.amp * g.env * 1.8 * g.dir;
+          const d = Math.sqrt(d2) + 0.001, f = 1 - d / g.r, s = f * f * g.amp * g.env * 1.8 * g.dir * Math.min(1, u * 2);
           vx += (-dy / d) * s; vy += (dx / d) * s;
         }
       }
@@ -1014,7 +1045,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
       }
       const len = Math.hypot(vx, vy) || 1;
       fx = vx / len; fy = vy / len;
-      fs = Math.max(0.3, 0.65 + 0.7 * (0.5 + qy));   // 速く流れる所と淀む所
+      fs = Math.max(0.3, 1 + u * 0.7 * qy * 2);   // うねりがあると、速く流れる所と淀む所ができる
     }
 
     const cb = program.color;
@@ -1036,20 +1067,20 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
         const p = paths[i % 3]; p.moveTo(x, y); p.lineTo(nx, ny);
         px[i] = nx; py[i] = ny;
       }
-      const Lc = 28 + 50 * dk;
-      const L = clamp(c[2] + (Lc - 50) * 0.85, 12, 92);
+      const L = c[2];   // 書いた色の明るさのまま（背景に合わせて変えない）
       ctx.lineCap = "round";
       // にじみ：太く薄い線を下に重ねる。軌跡と一緒に積み重なって、色がまわりへ染み出す
       if (bl > 0.01) {
         ctx.lineWidth = 0.5 + P.width * 4 + (1.5 + 9 * bl) * scale;
         for (let g = 0; g < 3; g++) {
-          ctx.strokeStyle = `hsla(${(c[0] + (g - 1) * 12).toFixed(1)},${c[1].toFixed(0)}%,${clamp(L + 6, 5, 96).toFixed(0)}%,${((0.004 + 0.012 * bl) * layer.flow).toFixed(4)})`;
+          ctx.strokeStyle = `hsla(${c[0].toFixed(1)},${c[1].toFixed(0)}%,${L.toFixed(0)}%,${((0.004 + 0.012 * bl) * layer.flow).toFixed(4)})`;
           ctx.stroke(paths[g]);
         }
       }
       ctx.lineWidth = 0.5 + P.width * 4;
       for (let g = 0; g < 3; g++) {
-        ctx.strokeStyle = `hsla(${(c[0] + (g - 1) * 12).toFixed(1)},${c[1].toFixed(0)}%,${clamp(L + (g - 1) * 6, 5, 96).toFixed(0)}%,${(0.52 * layer.flow).toFixed(3)})`;
+        // 色合いはずらさず、明るさだけをごく少し変えて重なりの奥行きを出す
+        ctx.strokeStyle = `hsla(${c[0].toFixed(1)},${c[1].toFixed(0)}%,${clamp(L + (g - 1) * 3, 2, 98).toFixed(0)}%,${(0.7 * layer.flow).toFixed(3)})`;
         ctx.stroke(paths[g]);
       }
     }
@@ -1082,8 +1113,8 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
       // 色：粒の色 があればそれ、なければ 線の色 を明るめに、どちらもなければ背景に合わせた白か墨色
       const gb = program.gcolor;
       const gc = gb ? rampColor(gb.ramp || DEFAULT_RAMP, P.gcolor) : null;
-      const base = gc ? [gc[0], gc[1], clamp(gc[2] + (dk > 0.5 ? 12 : -6), 8, 96)]
-        : cb ? [c[0], c[1], clamp(c[2] + (dk > 0.5 ? 22 : -10), 8, 96)] : [0, 0, dk > 0.5 ? 94 : 18];
+      // 書いた色のまま。どちらも書かれていないときだけ、背景に合わせた白か墨色
+      const base = gc ? gc : cb ? c : [0, 0, dk > 0.5 ? 94 : 18];
       if (halo) {
         ctx.fillStyle = `hsla(${base[0].toFixed(1)},${base[1].toFixed(0)}%,${base[2].toFixed(0)}%,${((0.006 + 0.016 * bl) * layer.grain).toFixed(4)})`;
         ctx.fill(halo);
@@ -1149,6 +1180,7 @@ details.env summary { cursor: pointer; padding-block: 10px; font-weight: 500; }
     layer.orb += (lt.orb - layer.orb) * le;
     layer.grain += (lt.grain - layer.grain) * le;
     layer.bleed += (lt.bleed - layer.bleed) * le;
+    layer.unr += (lt.unr - layer.unr) * le;
     if (N > 0) step(dtf);
     if ((meterN = (meterN + 1) % 2) === 0) meterTick();   // 2 フレームに 1 回
     requestAnimationFrame(frame);
